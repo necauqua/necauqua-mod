@@ -284,8 +284,8 @@ def configure = {
     afterEvaluate {
         tasks.findByName('prepareRuns')?.doLast {
             copy {
-                from file(buildDir, 'resources/main')
-                into file(buildDir, 'classes/java/main')
+                from buildDir.toPath().resolve('resources/main')
+                into buildDir.toPath().resolve('classes/java/main')
             }
         }
     }

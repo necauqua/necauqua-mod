@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.necauqua"
-version = "0.1.3"
+version = "0.1.4"
 
 task("publish").doLast {
     if (dependsOn.isEmpty()) {
