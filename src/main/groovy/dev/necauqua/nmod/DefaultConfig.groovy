@@ -200,7 +200,9 @@ def configure = {
     minecraft {
         mappings channel: 'snapshot', version: nmod.mappings
 
-        accessTransformer = at
+        if (at) {
+            accessTransformer = at
+        }
 
         def replacements = [
                 '@VERSION@'         : modversion,

@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.necauqua"
-version = "0.1.0"
+version = "0.1.1"
 
 task("publish").doLast {
     if (dependsOn.isEmpty()) {
@@ -48,16 +48,16 @@ dependencies {
 }
 
 if (listOf("repo.url", "repo.username", "repo.sk").all { project.hasProperty(it) }) {
-    task("uploadArchives", Upload::class) {
+    tasks.withType<Upload> {
         repositories {
             withConvention(MavenRepositoryHandlerConvention::class) {
                 mavenDeployer {
-                    configuration = configurations.getByName("deployer")
                     withGroovyBuilder {
+                        "setConfiguration"(configurations["deployer"])
                         "repository"("url" to uri(project.property("repo.url") as String)) {
                             "authentication"(
-                                "userName" to project.property("repo.username") as String,
-                                "privateKey" to project.property("repo.sk") as String
+                                "userName" to project.property("repo.username"),
+                                "password" to project.property("repo.sk")
                             )
                         }
                     }
