@@ -147,9 +147,9 @@ static def makeForgeUpdates(List<Tag> changelog, String template=null) {
         promos["${mc}-latest"] = mod
     }
 
-    def latest = changelog.find()
-    if (latest?.name?.contains('git')) {
-        def version = latest.name.substring(1)
+    def latest = changelog[0]?.name
+    if (latest?.contains('git')) {
+        def version = latest.substring(1)
         for (mc in McVersions.get(version.split('-')[0])) {
             promos["${mc}-latest"] = version
         }
@@ -178,7 +178,7 @@ def configure = {
     }
 
     def tags = getChangelog(project)
-    def latestChangelog = section(tags[0].log)
+    def latestChangelog = tags ? section(tags[0].log) : ''
     latestChangelog = latestChangelog.substring(0, latestChangelog.length() - 1)
 
     idea.project.jdkName =
