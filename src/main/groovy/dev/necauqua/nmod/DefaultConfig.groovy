@@ -178,7 +178,7 @@ def configure = {
     }
 
     def tags = getChangelog(project)
-    def latestChangelog = tags ? section(tags[0].log) : ''
+    def latestChangelog = tags ? section(tags[0].log) : '\n'
     latestChangelog = latestChangelog.substring(0, latestChangelog.length() - 1)
 
     idea.project.jdkName =
