@@ -62,7 +62,7 @@ static List<Tag> getUnreleasedChangelog(project, String rootCommit = null) {
     def unreleasedLog = parseLog('HEAD', rootCommit)
     if (!unreleasedLog.isEmpty()) {
         def (commit, date) = git(['log', '-1', '--format=%h|%ct'])[0].split('\\|').toList()
-        return [new Tag("v${project.version}-git-$commit", date.toInteger(), [:])]
+        return [new Tag("v${project.version}-git-$commit", date.toInteger(), unreleasedLog)]
     }
     def cmd = ['log', '--format=%h|%ct', 'HEAD']
     if (rootCommit) {
