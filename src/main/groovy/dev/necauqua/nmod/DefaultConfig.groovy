@@ -77,7 +77,7 @@ static List<Tag> getUnreleasedChangelog(project, String rootCommit = null) {
 }
 
 static List<Tag> getChangelog(project, String rootCommit = null) {
-    def cmd = ['for-each-ref', '--sort=-creatordate', '--format', '%(refname)|%(creatordate:unix)', 'refs/tags']
+    def cmd = ['for-each-ref', '--sort=-creatordate', '--format', '%(refname)|%(creatordate:unix)', 'refs/tags', '--merged']
     if (rootCommit) {
         cmd += ['--contains', rootCommit]
     }
