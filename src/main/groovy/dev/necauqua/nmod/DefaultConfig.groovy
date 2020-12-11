@@ -30,7 +30,7 @@ static List<String> git(_args) {
     return res != [''] ? res : []
 }
 
-static Map<String, List<String>> gitLog(String startRef = null, String endRef = null) {
+static Map<String, List<String>> parseLog(String startRef = null, String endRef = null) {
     def cmd = ['log', '--reverse', '--format=%b']
     if (startRef) {
         cmd += startRef
@@ -58,9 +58,22 @@ class Tag {
     Map<String, List<String>> log
 }
 
-static Tag makeUnreleasedPseudoTag(project, log) {
-    def (lastCommit, lastCommitDate) = git(['log', '-1', '--format=%h|%ct'])[0].split('\\|').toList()
-    return new Tag("v${project.version}-git-$lastCommit", lastCommitDate.toInteger(), log)
+static List<Tag> getUnreleasedChangelog(project, String rootCommit = null) {
+    def unreleasedLog = parseLog('HEAD', rootCommit)
+    if (!unreleasedLog.isEmpty()) {
+        def (commit, date) = git(['log', '-1', '--format=%h|%ct'])[0].split('\\|').toList()
+        return [new Tag("v${project.version}-git-$commit", date.toInteger(), [:])]
+    }
+    def cmd = ['log', '--format=%h|%ct', 'HEAD']
+    if (rootCommit) {
+        cmd += '^' + rootCommit
+    }
+    def commitsSinceLastTag = git(cmd)
+    if (!commitsSinceLastTag.isEmpty()) {
+        def (commit, date) = commitsSinceLastTag[0].split('\\|').toList()
+        return [new Tag("v${project.version}-git-$commit", date.toInteger(), [:])]
+    }
+    return []
 }
 
 static List<Tag> getChangelog(project, String rootCommit = null) {
@@ -72,27 +85,19 @@ static List<Tag> getChangelog(project, String rootCommit = null) {
 
     // no tags -> everything (that we have) is unreleased
     if (tags.isEmpty()) {
-        def unreleasedLog = gitLog('HEAD', rootCommit)
-        return unreleasedLog.isEmpty() ?
-                [] :
-                [makeUnreleasedPseudoTag(project, unreleasedLog)]
+        return getUnreleasedChangelog(project, rootCommit)
     }
 
     def (lastTag, lastDate) = tags.removeAt(0).split('\\|')
 
     tags += rootCommit ? (rootCommit + '|') : null
 
-    def releases = []
-
-    def unreleasedLog = gitLog('HEAD', lastTag)
-    if (!unreleasedLog.isEmpty()) {
-        releases += makeUnreleasedPseudoTag(project, unreleasedLog)
-    }
+    def releases = getUnreleasedChangelog(project, lastTag)
 
     for (t in tags) {
         def (tag, date) = t ? t.split('\\|').toList() : [null, '']
 
-        def releaseLog = gitLog(lastTag, tag)
+        def releaseLog = parseLog(lastTag, tag)
         if (!releaseLog.isEmpty()) {
             releases += new Tag(lastTag.substring(10), lastDate.toInteger(), releaseLog)
             lastTag = tag
@@ -103,6 +108,9 @@ static List<Tag> getChangelog(project, String rootCommit = null) {
 }
 
 static def section(Map<String, List<String>> log) {
+    if (log.isEmpty()) {
+        return "### No changelog from last tag up to this commit\n\n"
+    }
     def s = new StringBuilder()
     for (key in log.keySet().toSorted()) {
         s <<  "### ${key.capitalize()}\n"
@@ -322,9 +330,6 @@ def configure = {
     if (nmod.curseID && hasProperty('curseApiKey')) {
         curseforge {
             apiKey = curseApiKey
-            options {
-                debug = true
-            }
             project {
                 id = nmod.curseID
                 changelog = latestChangelog
@@ -349,12 +354,12 @@ def configure = {
         publish.dependsOn curseforge
     }
 
-    if (hasProperty('githubToken')) {
+    if (hasProperty('githubToken') && !modversion.contains('git')) {
         github {
             token = project.githubToken
             owner = 'necauqua'
             repo = nmod.githubRepo ?: project.name
-            tagName = "v${project.version}"
+            tagName = "v${modversion}"
             name = tagName
             body = latestChangelog
             assets = [jar.archivePath, deobfJar.archivePath]
