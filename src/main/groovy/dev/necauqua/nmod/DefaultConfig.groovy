@@ -16,9 +16,13 @@ class McVersions {
             .collect { it.id.count('.') == 1 ? it.id + '.0' : it.id }
 
     static def get(modmc) {
-        return all
+        def versions = all
                 .findAll { it.startsWith(modmc) }
                 .collect { it.endsWith('.0') ? it.substring(0, it.length() - 2) : it }
+        if (versions.isEmpty()) {
+            throw new IllegalArgumentException("Mod version didn't match any minecraft versions!")
+        }
+        return versions
     }
 }
 
@@ -58,11 +62,11 @@ class Tag {
     Map<String, List<String>> log
 }
 
-static List<Tag> getUnreleasedChangelog(project, String rootCommit = null) {
+static List<Tag> getUnreleasedChangelog(version, String rootCommit = null) {
     def unreleasedLog = parseLog('HEAD', rootCommit)
     if (!unreleasedLog.isEmpty()) {
         def (commit, date) = git(['log', '-1', '--format=%h|%ct'])[0].split('\\|').toList()
-        return [new Tag("v${project.version}-git-$commit", date.toInteger(), unreleasedLog)]
+        return [new Tag("v${version}-git-$commit", date.toInteger(), unreleasedLog)]
     }
     def cmd = ['log', '--format=%h|%ct', 'HEAD']
     if (rootCommit) {
@@ -71,12 +75,12 @@ static List<Tag> getUnreleasedChangelog(project, String rootCommit = null) {
     def commitsSinceLastTag = git(cmd)
     if (!commitsSinceLastTag.isEmpty()) {
         def (commit, date) = commitsSinceLastTag[0].split('\\|').toList()
-        return [new Tag("v${project.version}-git-$commit", date.toInteger(), [:])]
+        return [new Tag("v${version}-git-$commit", date.toInteger(), [:])]
     }
     return []
 }
 
-static List<Tag> getChangelog(project, String rootCommit = null) {
+static List<Tag> getChangelog(version, String rootCommit = null) {
     def cmd = ['for-each-ref', '--sort=-creatordate', '--format', '%(refname)|%(creatordate:unix)', 'refs/tags', '--merged']
     if (rootCommit) {
         cmd += ['--contains', rootCommit]
@@ -85,14 +89,14 @@ static List<Tag> getChangelog(project, String rootCommit = null) {
 
     // no tags -> everything (that we have) is unreleased
     if (tags.isEmpty()) {
-        return getUnreleasedChangelog(project, rootCommit)
+        return getUnreleasedChangelog(version, rootCommit)
     }
 
     def (lastTag, lastDate) = tags.removeAt(0).split('\\|')
 
     tags += rootCommit ? (rootCommit + '|') : null
 
-    def releases = getUnreleasedChangelog(project, lastTag)
+    def releases = getUnreleasedChangelog(version, lastTag)
 
     for (t in tags) {
         def (tag, date) = t ? t.split('\\|').toList() : [null, '']
@@ -173,21 +177,16 @@ def configure = {
     apply plugin: 'com.matthewprenger.cursegradle'
     apply plugin: 'co.riiid.gradle'
 
-    version = nmod.version
-    group = 'dev.necauqua.mods'
+    def tags = getChangelog(nmod.version)
 
-    def modversion = nmod.version
-    def modmc = modversion.split('-')[0]
-    def forgemc = nmod.forge.split('-')[0]
-    def mcversions = McVersions.get(modmc)
-
-    if (mcversions.isEmpty()) {
-        throw new IllegalArgumentException("Mod version didn't match any minecraft versions!")
-    }
-
-    def tags = getChangelog(project)
     def latestChangelog = tags ? section(tags[0].log) : '\n'
     latestChangelog = latestChangelog.substring(0, latestChangelog.length() - 1)
+
+    version = tags ? tags[0].name.substring(1) : nmod.version
+    group = 'dev.necauqua.mods'
+
+    def forgemc = nmod.forge.split('-')[0]
+    def mcversions = McVersions.get(version.split('-')[0])
 
     idea.project.jdkName =
             sourceCompatibility =
@@ -213,12 +212,12 @@ def configure = {
         }
 
         def replacements = [
-                '@VERSION@'         : modversion,
+                '@VERSION@'         : project.version,
                 '@MC_VERSION_RANGE@': mcversions.size() == 1 ?
                         "[${mcversions.first()}]" :
                         "[${mcversions.last()},${mcversions.first()}]",
                 // here we strip the .minor.patch-detail suffix (meh, shut up, I love regex)
-                '@API_VERSION@'     : modversion.replaceAll('(?:.*?-)(.*?)\\.\\d+\\.\\d+(?:-.*?)?$', '$1'),
+                '@API_VERSION@'     : project.version.replaceAll('(?:.*?-)(.*?)\\.\\d+\\.\\d+(?:-.*?)?$', '$1'),
         ]
 
         runs {
@@ -262,11 +261,11 @@ def configure = {
     }
 
     processResources {
-        inputs.property 'version', nmod.version
+        inputs.property 'version', project.version
         inputs.property 'mcversion', forgemc
         from(sourceSets.main.resources.srcDirs) {
             include 'mcmod.info'
-            expand 'version': nmod.version, 'mcversion': forgemc
+            expand 'version': project.version, 'mcversion': forgemc
         }
         from(sourceSets.main.resources.srcDirs) {
             exclude 'mcmod.info'
@@ -334,9 +333,9 @@ def configure = {
                 id = nmod.curseID
                 changelog = latestChangelog
                 changelogType = 'markdown'
-                releaseType = modversion.contains('-git') ?
+                releaseType = project.version.contains('-git') ?
                         'alpha' :
-                        modversion.contains('-beta') || modversion.contains('-rc') ?
+                        project.version.contains('-beta') || project.version.contains('-rc') ?
                                 'beta' :
                                 'release'
                 mcversions.each { addGameVersion(it) }
@@ -354,16 +353,16 @@ def configure = {
         publish.dependsOn curseforge
     }
 
-    if (hasProperty('githubToken') && !modversion.contains('git')) {
+    if (hasProperty('githubToken') && !project.version.contains('git')) {
         github {
             token = project.githubToken
             owner = 'necauqua'
             repo = nmod.githubRepo ?: project.name
-            tagName = "v${modversion}"
+            tagName = "v${project.version}"
             name = tagName
             body = latestChangelog
             assets = [jar.archivePath, deobfJar.archivePath]
-            prerelease = modversion.contains('-beta') || modversion.contains('-rc')
+            prerelease = project.version.contains('-beta') || project.version.contains('-rc')
         }
         githubRelease.group = 'publishing'
         githubRelease.dependsOn build
