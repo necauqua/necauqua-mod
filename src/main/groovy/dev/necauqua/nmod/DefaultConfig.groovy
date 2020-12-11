@@ -370,8 +370,6 @@ def configure = {
         publish.dependsOn githubRelease
     }
 
-    defaultTasks 'clean', 'setupCiWorkspace', 'build'
-
     task('generateChangelog') {
         def template = project.hasProperty('changelogTemplate') ? project.changelogTemplate : null
         doLast {
