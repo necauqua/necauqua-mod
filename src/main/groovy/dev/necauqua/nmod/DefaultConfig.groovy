@@ -357,7 +357,7 @@ def configure = {
             tagName = "v${project.version}"
             name = tagName
             body = latestChangelog
-            assets = [jar.archivePath]
+            assets = [jar.archivePath, deobfJar.archivePath]
             prerelease = modversion.contains('-beta') || modversion.contains('-rc')
         }
         githubRelease.group = 'publishing'
