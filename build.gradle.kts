@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "dev.necauqua"
-version = "0.1.10"
+version = "0.1.11"
 
 gradlePlugin.plugins.create("necauqua-mod") {
     id = "dev.necauqua.nmod"

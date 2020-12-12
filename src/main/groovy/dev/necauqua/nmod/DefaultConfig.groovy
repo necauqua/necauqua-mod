@@ -324,11 +324,16 @@ def configure = {
 
     task('publish') {
         group = 'publishing'
+        doLast {
+            if (dependsOn.isEmpty()) {
+                throw new IllegalStateException('No publishing configurations configured')
+            }
+        }
     }
 
-    if (nmod.curseID && hasProperty('curseApiKey')) {
+    if (nmod.curseID && project.hasProperty('curseApiKey')) {
         curseforge {
-            apiKey = curseApiKey
+            apiKey = project.curseApiKey
             project {
                 id = nmod.curseID
                 changelog = latestChangelog
@@ -338,22 +343,20 @@ def configure = {
                         project.version.contains('-beta') || project.version.contains('-rc') ?
                                 'beta' :
                                 'release'
+                addGameVersion('1.8')
                 mcversions.each { addGameVersion(it) }
                 mainArtifact(jar)
                 addArtifact(deobfJar)
-                if (nmod.apiPath) {
-                    addArtifact(apiJar)
-                }
             }
         }
         tasks['curseforge'].group = 'publishing'
+        tasks['publish'].dependsOn += 'curseforge'
         afterEvaluate {
             tasks["curseforge${nmod.curseID}"].group = null
         }
-        publish.dependsOn curseforge
     }
 
-    if (hasProperty('githubToken') && !project.version.contains('git')) {
+    if (project.hasProperty('githubToken') && !project.version.contains('git')) {
         github {
             token = project.githubToken
             owner = 'necauqua'
@@ -364,9 +367,9 @@ def configure = {
             assets = [jar.archivePath, deobfJar.archivePath]
             prerelease = project.version.contains('-beta') || project.version.contains('-rc')
         }
-        githubRelease.group = 'publishing'
-        githubRelease.dependsOn build
-        publish.dependsOn githubRelease
+        tasks['githubRelease'].group = 'publishing'
+        tasks['githubRelease'].dependsOn += 'build'
+        tasks['publish'].dependsOn += 'githubRelease'
     }
 
     task('generateChangelog') {

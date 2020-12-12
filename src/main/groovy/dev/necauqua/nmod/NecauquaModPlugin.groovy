@@ -1,20 +1,14 @@
 package dev.necauqua.nmod
 
-import groovy.json.JsonOutput
-import groovy.json.JsonSlurper
-import groovy.transform.Field
-import groovy.transform.Immutable
-import net.minecraftforge.gradle.common.task.SignJar
+
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.tasks.bundling.Jar
 
 class Nmod {
     String curseID = null
     String version = null
     String forge = null
     String mappings = null
-    String apiPath = null
     String coremod = null
     String githubRepo = null
 }
