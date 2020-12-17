@@ -5,6 +5,8 @@ import groovy.json.JsonSlurper
 import groovy.transform.Field
 import groovy.transform.Immutable
 import net.minecraftforge.gradle.common.task.SignJar
+import org.apache.tools.ant.filters.ReplaceTokens
+import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.bundling.Jar
 
 // unsurprisingly, groovy continues to show how shit it is
@@ -20,17 +22,14 @@ class McVersions {
                 .findAll { it.startsWith(modmc) }
                 .collect { it.endsWith('.0') ? it.substring(0, it.length() - 2) : it }
         if (versions.isEmpty()) {
-            throw new IllegalArgumentException("Mod version didn't match any minecraft versions!")
+            throw new IllegalArgumentException('Mod version didn\'t match any minecraft versions!')
         }
         return versions
     }
 }
 
-static List<String> git(_args) {
-    def args = []
-    args += 'git'
-    args += _args
-    def res = args.execute().text.split('\n').toList()
+static List<String> git(args) {
+    def res = ['git', *args].execute().text.split('\n').toList()
     return res != [''] ? res : []
 }
 
@@ -48,7 +47,7 @@ static Map<String, List<String>> parseLog(String startRef = null, String endRef 
         if (line.endsWith(':')) {
             line = line.substring(0, line.length() - 1).toLowerCase()
             current = log.computeIfAbsent(line) { [] }
-        } else if (line.startsWith("  - ")) {
+        } else if (line.startsWith('  - ')) {
             current.add(line.substring(4))
         }
     }
@@ -117,7 +116,7 @@ static def section(Map<String, List<String>> log) {
     }
     def s = new StringBuilder()
     for (key in log.keySet().toSorted()) {
-        s <<  "### ${key.capitalize()}\n"
+        s << "### ${key.capitalize()}\n"
         for (item in log[key]) {
             s << "  - $item\n"
         }
@@ -126,24 +125,25 @@ static def section(Map<String, List<String>> log) {
     return s.toString()
 }
 
-static def makeMarkdown(List<Tag> changelog, String template=null) {
+static def makeMarkdown(List<Tag> changelog, String template = null) {
     def s = new StringBuilder()
     for (release in changelog) {
-        s << "## [${release.name.substring(1)}] ${new Date(release.date * 1000L).format('1yyyy-MM-dd')}\n"
-        s << section(release.log)
+        s << '## [' << release.name.substring(1) << '] '
+        s << new Date(release.date * 1000L).format('1yyyy-MM-dd')
+        s << '\n' << section(release.log)
     }
-    s.setLength(s.length() - 1) // strip last newline
-    return String.format(template ? new File(template).text : '%s', s.toString())
+    s.setLength(s.length() - 1) // strip last section newline
+    return (template ? new File(template).text : '%s').format(s.toString())
 }
 
-static def makeForgeUpdates(List<Tag> changelog, String template=null) {
+static def makeForgeUpdates(List<Tag> changelog, String template = null) {
     def result = template ? new JsonSlurper().parse(new File(template)) : [:]
 
     def recomended = [:]
 
     for (release in changelog) {
         def version = release.name.substring(1)
-        for (mc in McVersions.get(version.split("-")[0])) {
+        for (mc in McVersions.get(version.split('-')[0])) {
             if (!release.name.contains('git')) {
                 recomended.computeIfAbsent(mc) { version }
             }
@@ -169,6 +169,8 @@ static def makeForgeUpdates(List<Tag> changelog, String template=null) {
     return JsonOutput.toJson(result)
 }
 
+// the lowest possible indentation level for pseudo-gradle config
+// without evaluating groovy from a file
 @Field
 def configure = {
     apply plugin: 'java'
@@ -211,15 +213,6 @@ def configure = {
             accessTransformer = at
         }
 
-        def replacements = [
-                '@VERSION@'         : project.version,
-                '@MC_VERSION_RANGE@': mcversions.size() == 1 ?
-                        "[${mcversions.first()}]" :
-                        "[${mcversions.last()},${mcversions.first()}]",
-                // here we strip the .minor.patch-detail suffix (meh, shut up, I love regex)
-                '@API_VERSION@'     : project.version.replaceAll('(?:.*?-)(.*?)\\.\\d+\\.\\d+(?:-.*?)?$', '$1'),
-        ]
-
         runs {
             client {
                 workingDirectory file('build/run')
@@ -227,7 +220,6 @@ def configure = {
                         '--username', 'necauqua',
                         '--uuid', 'f98e9365-2c52-48c5-8647-6662f70b7e3d'
                 ]
-                tokens replacements
                 property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
                 property 'forge.logging.console.level', 'debug'
                 if (nmod.coremod) {
@@ -240,7 +232,6 @@ def configure = {
                         '--username', 'necauqua2',
                 ]
                 main 'net.minecraftforge.legacydev.MainClient'
-                tokens replacements
                 property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
                 property 'forge.logging.console.level', 'debug'
                 if (nmod.coremod) {
@@ -248,7 +239,6 @@ def configure = {
                 }
             }
             server {
-                tokens replacements
                 workingDirectory file('build/server')
                 property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
                 property 'forge.logging.console.level', 'debug'
@@ -260,9 +250,30 @@ def configure = {
         minecraft "net.minecraftforge:forge:${nmod.forge}"
     }
 
+    task('processSources', type: Copy) {
+        def processedFolder = buildDir.toPath().resolve('processSources')
+
+        inputs.property('version', project.version)
+        from(compileJava.source)
+        into(processedFolder)
+
+        compileJava.source = processedFolder
+
+        filter(ReplaceTokens, tokens: [
+                VERSION         : project.version,
+                MC_VERSION_RANGE: (mcversions.size() == 1 ?
+                        "[${mcversions.first()}]" :
+                        "[${mcversions.last()},${mcversions.first()}]").toString(),
+                // here we strip the .minor.patch-detail suffix (meh, shut up, I love regex)
+                API_VERSION     : project.version.replaceAll('(?:.*?-)(.*?)\\.\\d+\\.\\d+(?:-.*?)?$', '$1'),
+        ])
+        // ensure there is stuff in compileJava.source in case there are other preprocessing tasks
+        mustRunAfter(compileJava.dependsOn.findAll { it instanceof Copy })
+    }
+    compileJava.dependsOn += processSources
+
     processResources {
-        inputs.property 'version', project.version
-        inputs.property 'mcversion', forgemc
+        inputs.property('version', project.version)
         from(sourceSets.main.resources.srcDirs) {
             include 'mcmod.info'
             expand 'version': project.version, 'mcversion': forgemc
