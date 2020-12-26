@@ -1,12 +1,10 @@
 plugins {
-    `java-gradle-plugin`
-    groovy
-    maven
-    id("com.gradle.plugin-publish") version "0.12.0"
+    `groovy-gradle-plugin`
+    `maven-publish`
 }
 
 group = "dev.necauqua"
-version = "0.2.0"
+version = "0.3.0"
 
 gradlePlugin.plugins.create("necauqua-mod") {
     id = "dev.necauqua.nmod"
@@ -14,8 +12,6 @@ gradlePlugin.plugins.create("necauqua-mod") {
     description = "Common configuration for necauquas Minecraft mods"
     implementationClass = "dev.necauqua.nmod.NecauquaModPlugin"
 }
-
-configurations.register("deployer")
 
 repositories {
     jcenter()
@@ -27,32 +23,47 @@ dependencies {
     implementation("net.minecraftforge.gradle:ForgeGradle:3.+")
     implementation("co.riiid.gradle:co.riiid.gradle.gradle.plugin:0.4.1")
     implementation("com.matthewprenger.cursegradle:com.matthewprenger.cursegradle.gradle.plugin:1.4.0")
-
-    add("deployer", "org.apache.maven.wagon:wagon-ssh-external:3.4.0")
 }
 
-val publish = task("publish").doLast {
-    if (dependsOn.isEmpty()) {
-        throw IllegalStateException("No publishing configurations")
-    }
-}
-
-if (listOf("repo.url", "repo.username", "repo.sk").all { project.hasProperty(it) }) {
-    // tasks.getByName<Upload>("uploadArchives") { .. } does not work (tries to cast Upload to Unit somehow idk)
-    tasks.withType<Upload> {
-        repositories.withConvention(MavenRepositoryHandlerConvention::class) {
-            mavenDeployer {
-                withGroovyBuilder {
-                    "setConfiguration"(configurations["deployer"])
-                    "repository"("url" to uri(project.property("repo.url") as String)) {
-                        "authentication"(
-                            "userName" to project.property("repo.username"),
-                            "password" to project.property("repo.sk")
-                        )
+if (listOf("maven.user", "maven.pass").all(project::hasProperty)) {
+    publishing {
+        publications {
+            create<MavenPublication>("main") {
+                from(components["java"])
+                pom {
+                    name.set("necauqua-mod")
+                    description.set("A dumb Gradle plugin that sets up all the defaults related to making a Minecraft mod if you are *me*")
+                    url.set("https://github.com/necauqua/necauqua-mod#readme")
+                    licenses {
+                        license {
+                            name.set("MIT License")
+                            url.set("https://opensource.org/licenses/mit-license")
+                        }
+                    }
+                    developers {
+                        developer {
+                            id.set("necauqua")
+                            name.set("Anton Bulakh")
+                            email.set("self@necauqua.dev")
+                        }
+                    }
+                    scm {
+                        connection.set("scm:git:https://github.com/necauqua/necauqua-mod")
+                        developerConnection.set("scm:git:https://github.com/necauqua/necauqua-mod")
+                        url.set("https://github.com/necauqua/necauqua-mod#readme")
                     }
                 }
             }
         }
-        publish.dependsOn += this
+        repositories {
+            maven {
+                name = "necauqua"
+                url = uri("https://maven.necauqua.dev")
+                credentials {
+                    username = project.properties["maven.user"] as String
+                    password = project.properties["maven.pass"] as String
+                }
+            }
+        }
     }
 }

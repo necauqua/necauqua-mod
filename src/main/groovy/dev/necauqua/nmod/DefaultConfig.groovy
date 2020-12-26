@@ -6,8 +6,10 @@ import groovy.transform.Field
 import groovy.transform.Immutable
 import net.minecraftforge.gradle.common.task.SignJar
 import org.apache.tools.ant.filters.ReplaceTokens
+import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.bundling.Jar
+import org.gradle.api.tasks.javadoc.Javadoc
 
 // unsurprisingly, groovy continues to show how shit it is
 class McVersions {
@@ -172,14 +174,32 @@ static def makeForgeUpdates(List<Tag> changelog, String template = null) {
 // the lowest possible indentation level for pseudo-gradle config
 // without evaluating groovy from a file
 @Field
-def configure = {
+def apply = {
     apply plugin: 'java'
+    apply plugin: 'maven-publish'
     apply plugin: 'idea'
     apply plugin: 'net.minecraftforge.gradle'
     apply plugin: 'com.matthewprenger.cursegradle'
     apply plugin: 'co.riiid.gradle'
+}
+
+@Field
+def configure = {
 
     def tags = getChangelog(nmod.version)
+
+    task('generateChangelog') {
+        def template = project.hasProperty('changelogTemplate') ? project.changelogTemplate : null
+        doLast {
+            print(makeMarkdown(tags, template))
+        }
+    }
+    task('generateForgeUpdates') {
+        def template = project.hasProperty('updatesTemplate') ? project.updatesTemplate : null
+        doLast {
+            print(makeForgeUpdates(tags, template))
+        }
+    }
 
     def latestChangelog = tags ? section(tags[0].log) : '\n'
     latestChangelog = latestChangelog.substring(0, latestChangelog.length() - 1)
@@ -198,18 +218,24 @@ def configure = {
 
     idea.module.inheritOutputDirs = true
 
-    def ats = fileTree('src/main/resources')
-            .matching { include '*_at.cfg' }
-            .asList()
-    if (ats.size() > 1) {
-        throw new IllegalStateException("Found more than one Access Transformer! $it")
+    def api = sourceSets.findByName('api')
+
+    if (api) {
+        sourceSets.main {
+            compileClasspath += api.output
+            runtimeClasspath += api.output
+        }
+        configurations {
+            apiCompile.extendsFrom(compile)
+        }
     }
-    def at = ats.find()
+
+    def at = file('src/main/resources/accesstransformer.cfg')
 
     minecraft {
         mappings channel: 'snapshot', version: nmod.mappings
 
-        if (at) {
+        if (at.exists()) {
             accessTransformer = at
         }
 
@@ -220,10 +246,16 @@ def configure = {
                         '--username', 'necauqua',
                         '--uuid', 'f98e9365-2c52-48c5-8647-6662f70b7e3d'
                 ]
-                property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
                 property 'forge.logging.console.level', 'debug'
                 if (nmod.coremod) {
                     property 'fml.coreMods.load', nmod.coremod
+                }
+
+                mods.create(project.name) {
+                    source sourceSets.main
+                    if (api) {
+                        source api
+                    }
                 }
             }
             client2 {
@@ -231,17 +263,28 @@ def configure = {
                 args += [
                         '--username', 'necauqua2',
                 ]
-                main 'net.minecraftforge.legacydev.MainClient'
-                property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
                 property 'forge.logging.console.level', 'debug'
                 if (nmod.coremod) {
                     property 'fml.coreMods.load', nmod.coremod
                 }
+
+                mods.create(project.name) {
+                    source sourceSets.main
+                    if (api) {
+                        source api
+                    }
+                }
             }
             server {
                 workingDirectory file('build/server')
-                property 'forge.logging.markers', 'SCAN,REGISTRIES,REGISTRYDUMP'
                 property 'forge.logging.console.level', 'debug'
+
+                mods.create(project.name) {
+                    source sourceSets.main
+                    if (api) {
+                        source api
+                    }
+                }
             }
         }
     }
@@ -250,6 +293,7 @@ def configure = {
         minecraft "net.minecraftforge:forge:${nmod.forge}"
     }
 
+    // keep most of source/resource preprocessing for 1.12 compat
     task('processSources', type: Copy) {
         def processedFolder = buildDir.toPath().resolve('processSources')
 
@@ -281,11 +325,16 @@ def configure = {
         from(sourceSets.main.resources.srcDirs) {
             exclude 'mcmod.info'
         }
-        rename '(.+_at.cfg)', 'META-INF/$1'
+        if (api) {
+            from(api.resources.srcDirs)
+        }
+        rename '(accesstransformer\\.cfg|mods\\.toml|coremods\\.json)', 'META-INF/$1'
     }
 
     jar {
         finalizedBy 'reobfJar'
+        finalizedBy 'signJar'
+
         manifest {
             if (nmod.coremod) {
                 attributes 'FMLCorePlugin': nmod.coremod, 'FMLCorePluginContainsFMLMod': 'true'
@@ -293,18 +342,52 @@ def configure = {
             if (at) {
                 attributes 'FMLAT': at.name
             }
+            attributes([
+                    'Specification-Title'     : 'Forge Minecraft Mod',
+                    'Specification-Vendor'    : 'Minecraft Forge',
+                    'Specification-Version'   : '1',
+                    'Implementation-Title'    : project.name,
+                    'Implementation-Version'  : project.version,
+                    'Implementation-Vendor'   : 'necauqua',
+                    'Implementation-Timestamp': new Date().format('yyyy-MM-dd\'T\'HH:mm:ssZ')
+            ])
+        }
+        if (api) {
+            from api.output.classesDirs
         }
         from 'LICENSE'
     }
 
-    // hack for resources to be actually loaded with new forgegradle in 1.12
-    // I guess new fg isn't very suited/tested for 1.12
-    afterEvaluate {
-        tasks.findByName('prepareRuns')?.doLast {
-            copy {
-                from buildDir.toPath().resolve('resources/main')
-                into buildDir.toPath().resolve('classes/java/main')
-            }
+    task('sourcesJar', type: Jar) {
+        classifier = 'src'
+        from sourceSets.main.allJava
+        if (sourceSets.api) {
+            from sourceSets.api.allJava
+        }
+    }
+
+    artifacts.archives sourcesJar
+
+    if (api) {
+        task('javadocs', type: Javadoc) {
+            classpath = sourceSets.main.compileClasspath
+            source = api.java
+            options.addStringOption('Xdoclint:none', '-quiet')
+        }
+
+        task('javadocJar', type: Jar, dependsOn: 'javadocs') {
+            classifier = 'javadoc'
+            from javadoc.destinationDir
+        }
+
+        task('apiJar', type: Jar) {
+            from api.output
+            classifier = 'api'
+        }
+
+        artifacts {
+            archives javadocJar
+            archives apiJar
         }
     }
 
@@ -323,24 +406,8 @@ def configure = {
         outputFile = jar.archivePath
     }
 
-    task('deobfJar', type: Jar) {
-        from sourceSets.main.output
-        manifest = jar.manifest
-        classifier = 'deobf'
-    }
-
-    artifacts.archives deobfJar
-
-    build.dependsOn signJar
-
-    task('publish') {
-        group = 'publishing'
-        doLast {
-            if (dependsOn.isEmpty()) {
-                throw new IllegalStateException('No publishing configurations configured')
-            }
-        }
-    }
+    def isBeta = project.version.contains('-beta') || project.version.contains('-rc')
+    def isGit = project.version.contains('-git')
 
     if (nmod.curseID && project.hasProperty('curseApiKey')) {
         curseforge {
@@ -349,50 +416,123 @@ def configure = {
                 id = nmod.curseID
                 changelog = latestChangelog
                 changelogType = 'markdown'
-                releaseType = project.version.contains('-git') ?
-                        'alpha' :
-                        project.version.contains('-beta') || project.version.contains('-rc') ?
-                                'beta' :
-                                'release'
-                addGameVersion('1.8')
+                releaseType = isGit ? 'alpha' : isBeta ? 'beta' : 'release'
                 mcversions.each { addGameVersion(it) }
                 mainArtifact(jar)
-                addArtifact(deobfJar)
             }
         }
         tasks['curseforge'].group = 'publishing'
-        tasks['publish'].dependsOn += 'curseforge'
-        afterEvaluate {
-            tasks["curseforge${nmod.curseID}"].group = null
-        }
     }
 
-    if (project.hasProperty('githubToken') && !project.version.contains('git')) {
+    if (nmod.githubRepo && project.hasProperty('githubToken') && !project.version.contains('git')) {
         github {
             token = project.githubToken
             owner = 'necauqua'
-            repo = nmod.githubRepo ?: project.name
+            repo = nmod.githubRepo
             tagName = "v${project.version}"
             name = tagName
             body = latestChangelog
-            assets = [jar.archivePath, deobfJar.archivePath]
-            prerelease = project.version.contains('-beta') || project.version.contains('-rc')
+            assets = [jar.archivePath]
+            prerelease = isBeta || isGit
         }
         tasks['githubRelease'].group = 'publishing'
         tasks['githubRelease'].dependsOn += 'build'
-        tasks['publish'].dependsOn += 'githubRelease'
     }
 
-    task('generateChangelog') {
-        def template = project.hasProperty('changelogTemplate') ? project.changelogTemplate : null
-        doLast {
-            print(makeMarkdown(tags, template))
+    publishing {
+        publications {
+            maven(MavenPublication) {
+                groupId = project.group
+                artifactId = project.archivesBaseName
+                version = project.version
+
+                // fix for https://github.com/MinecraftForge/ForgeGradle/issues/584
+                // just removes the whole deps node, good that I don't have any (yet)
+                pom.withXml {
+                    asNode().remove(asNode().dependencies)
+                }
+
+                from components.java
+
+                artifact sourcesJar
+
+                if (api) {
+                    artifact apiJar
+                    artifact javadocJar
+                }
+
+                pom {
+                    name = project.name
+                    developers {
+                        developer {
+                            id = 'necauqua'
+                            name = 'Anton Bulakh'
+                            email = 'self@necauqua.dev'
+                        }
+                    }
+                    if (nmod.description) {
+                        description = nmod.description
+                    }
+                    if (nmod.license) {
+                        licenses {
+                            license {
+                                name = nmod.license
+                                if (nmod.licenseUrl) {
+                                    url = nmod.licenseUrl
+                                }
+                            }
+                        }
+                    }
+                    if (nmod.githubRepo) {
+                        url = "https://github.com/necauqua/${nmod.githubRepo}#readme"
+                        scm {
+                            url = "https://github.com/necauqua/${nmod.githubRepo}"
+                            connection = developerConnection = "scm:git:https://github.com/necauqua/${nmod.githubRepo}"
+                        }
+                        if (project.githubToken) {
+                            def get = { url ->
+                                def conn = new URL(url).openConnection()
+                                conn.setRequestProperty('Authorization', "token ${project.githubToken}")
+                                return new JsonSlurper().parse(conn.getInputStream())
+                            }
+                            def data = get("https://api.github.com/repos/necauqua/${nmod.githubRepo}")
+                            if (!nmod.description) {
+                                description = data.description
+                            }
+                            if (!nmod.license) {
+                                licenses {
+                                    license {
+                                        name = data.license.name
+                                        url = get(data.license.url).html_url
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
-    }
-    task('generateForgeUpdates') {
-        def template = project.hasProperty('updatesTemplate') ? project.updatesTemplate : null
-        doLast {
-            print(makeForgeUpdates(tags, template))
+        repositories {
+            if (nmod.githubRepo && System.getenv('GITHUB_ACTOR')) {
+                maven {
+                    credentials {
+                        username System.getenv('GITHUB_ACTOR')
+                        password System.getenv('GITHUB_TOKEN')
+                    }
+                    name = 'GitHubPackages'
+                    url = "https://maven.pkg.github.com/necauqua/${nmod.githubRepo}"
+                }
+            }
+            if (project.hasProperty('maven.user') && project.hasProperty('maven.pass')) {
+                maven {
+                    name = 'necauqua'
+                    url = 'https://maven.necauqua.dev/'
+                    credentials {
+                        username project['maven.user']
+                        password project['maven.pass']
+                    }
+                }
+            }
         }
     }
 }
