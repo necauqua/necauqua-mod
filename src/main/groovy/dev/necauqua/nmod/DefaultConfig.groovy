@@ -489,7 +489,7 @@ def configure = {
                             url = "https://github.com/necauqua/${nmod.githubRepo}"
                             connection = developerConnection = "scm:git:https://github.com/necauqua/${nmod.githubRepo}"
                         }
-                        if (project.githubToken) {
+                        if (project.hasProperty('githubToken')) {
                             def get = { url ->
                                 def conn = new URL(url).openConnection()
                                 conn.setRequestProperty('Authorization', "token ${project.githubToken}")
@@ -513,11 +513,11 @@ def configure = {
             }
         }
         repositories {
-            if (nmod.githubRepo && System.getenv('GITHUB_ACTOR')) {
+            if (project.hasProperty('githubToken') && nmod.githubRepo) {
                 maven {
                     credentials {
-                        username System.getenv('GITHUB_ACTOR')
-                        password System.getenv('GITHUB_TOKEN')
+                        username 'necauqua'
+                        password project.githubToken
                     }
                     name = 'GitHubPackages'
                     url = "https://maven.pkg.github.com/necauqua/${nmod.githubRepo}"
