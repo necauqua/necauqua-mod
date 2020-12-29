@@ -69,20 +69,11 @@ class Tag {
 
 static List<Tag> getUnreleasedChangelog(version, String rootCommit = null) {
     def unreleasedLog = parseLog('HEAD', rootCommit)
-    if (!unreleasedLog.isEmpty()) {
-        def (commit, date) = git(['log', '-1', '--format=%h|%ct'])[0].split('\\|').toList()
-        return [new Tag("v${version}-git-$commit", date.toInteger(), unreleasedLog)]
+    if (unreleasedLog.isEmpty()) {
+        return []
     }
-    def cmd = ['log', '--format=%h|%ct', 'HEAD']
-    if (rootCommit) {
-        cmd += '^' + rootCommit
-    }
-    def commitsSinceLastTag = git(cmd)
-    if (!commitsSinceLastTag.isEmpty()) {
-        def (commit, date) = commitsSinceLastTag[0].split('\\|').toList()
-        return [new Tag("v${version}-git-$commit", date.toInteger(), [:])]
-    }
-    return []
+    def (commit, date) = git(['log', '-1', '--format=%h|%ct'])[0].split('\\|').toList()
+    return [new Tag("v${version}-git-$commit", date.toInteger(), unreleasedLog)]
 }
 
 static List<Tag> getChangelog(version, String rootCommit = null) {
@@ -117,9 +108,6 @@ static List<Tag> getChangelog(version, String rootCommit = null) {
 }
 
 static def section(Map<String, List<String>> log) {
-    if (log.isEmpty()) {
-        return "### No changelog from last tag up to this commit\n\n"
-    }
     def s = new StringBuilder()
     for (key in log.keySet().toSorted()) {
         s << "### ${key.capitalize()}\n"
