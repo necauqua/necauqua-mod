@@ -6,10 +6,14 @@ import groovy.transform.Field
 import groovy.transform.Immutable
 import net.minecraftforge.gradle.common.task.SignJar
 import org.apache.tools.ant.filters.ReplaceTokens
+import org.gradle.api.DefaultTask
 import org.gradle.api.publish.maven.MavenPublication
-import org.gradle.api.tasks.Copy
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.javadoc.Javadoc
+import org.gradle.api.tasks.options.Option
 
 // unsurprisingly, groovy continues to show how shit it is
 class McVersions {
@@ -135,7 +139,7 @@ static def makeMarkdown(List<Tag> changelog, String template = null) {
         s << '\n' << section(release.log)
     }
     s.setLength(s.length() - 1) // strip last section newline
-    return (template ? new File(template).text : '%s').format(s.toString())
+    return String.format(template ? new File(template).text : '%s', s.toString())
 }
 
 static def makeForgeUpdates(List<Tag> changelog, String template = null) {
@@ -183,22 +187,27 @@ def apply = {
     apply plugin: 'co.riiid.gradle'
 }
 
+
+class Templated extends DefaultTask {
+
+    @Option(option = 'template', description = 'The template file used for this task.')
+    @Input
+    @Optional
+    String template = null
+}
+
+
 @Field
 def configure = {
 
     def tags = getChangelog(nmod.version)
 
-    task('generateChangelog') {
-        def template = project.hasProperty('changelogTemplate') ? project.changelogTemplate : null
-        doLast {
-            print(makeMarkdown(tags, template))
-        }
+    task('generateChangelog', type: Templated) {
+        doLast { print(makeMarkdown(tags, template)) }
     }
-    task('generateForgeUpdates') {
-        def template = project.hasProperty('updatesTemplate') ? project.updatesTemplate : null
-        doLast {
-            print(makeForgeUpdates(tags, template))
-        }
+
+    task('generateForgeUpdates', type: Templated) {
+        doLast { print(makeForgeUpdates(tags, template)) }
     }
 
     def latestChangelog = tags ? section(tags[0].log) : '\n'
@@ -294,7 +303,7 @@ def configure = {
     }
 
     // keep most of source/resource preprocessing for 1.12 compat
-    task('processSources', type: Copy) {
+    task('processSources', type: Sync) {
         def processedFolder = buildDir.toPath().resolve('processSources')
 
         inputs.property('version', project.version)
@@ -312,7 +321,7 @@ def configure = {
                 API_VERSION     : project.version.replaceAll('(?:.*?-)(.*?)\\.\\d+\\.\\d+(?:-.*?)?$', '$1'),
         ])
         // ensure there is stuff in compileJava.source in case there are other preprocessing tasks
-        mustRunAfter(compileJava.dependsOn.findAll { it instanceof Copy })
+        mustRunAfter(compileJava.dependsOn.findAll { it instanceof Sync })
     }
     compileJava.dependsOn += processSources
 
