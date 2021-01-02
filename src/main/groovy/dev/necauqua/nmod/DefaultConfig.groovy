@@ -8,6 +8,7 @@ import net.minecraftforge.gradle.common.task.SignJar
 import org.apache.tools.ant.filters.ReplaceTokens
 import org.gradle.api.DefaultTask
 import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.tasks.AbstractCopyTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.Sync
@@ -57,6 +58,7 @@ static Map<String, List<String>> parseLog(String startRef = null, String endRef 
             current.add(line.substring(4))
         }
     }
+    log.values().removeIf { it.isEmpty() }
     return log
 }
 
@@ -126,7 +128,9 @@ static def makeMarkdown(List<Tag> changelog, String template = null) {
         s << new Date(release.date * 1000L).format('1yyyy-MM-dd')
         s << '\n' << section(release.log)
     }
-    s.setLength(s.length() - 1) // strip last section newline
+    if (s.length() != 0) {
+        s.setLength(s.length() - 1) // strip last section newline
+    }
     return String.format(template ? new File(template).text : '%s', s.toString())
 }
 
@@ -166,7 +170,7 @@ static def makeForgeUpdates(List<Tag> changelog, String template = null) {
 // the lowest possible indentation level for pseudo-gradle config
 // without evaluating groovy from a file
 @Field
-def apply = {
+def before = {
     apply plugin: 'java'
     apply plugin: 'maven-publish'
     apply plugin: 'idea'
@@ -241,11 +245,18 @@ def configure = {
                 workingDirectory file('build/run')
                 args += [
                         '--username', 'necauqua',
-                        '--uuid', 'f98e9365-2c52-48c5-8647-6662f70b7e3d'
+                        '--uuid', 'f98e9365-2c52-48c5-8647-6662f70b7e3d',
                 ]
                 property 'forge.logging.console.level', 'debug'
                 if (nmod.coremod) {
                     property 'fml.coreMods.load', nmod.coremod
+                }
+                if (nmod.mixin) {
+                    args += [
+                            '--mixin', "${project.name}.mixins.json".toString(),
+                            '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
+                    ]
+                    properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true'
                 }
 
                 mods.create(project.name) {
@@ -257,12 +268,17 @@ def configure = {
             }
             client2 {
                 workingDirectory file('build/run')
-                args += [
-                        '--username', 'necauqua2',
-                ]
+                args += ['--username', 'necauqua2']
                 property 'forge.logging.console.level', 'debug'
                 if (nmod.coremod) {
                     property 'fml.coreMods.load', nmod.coremod
+                }
+                if (nmod.mixin) {
+                    args += [
+                            '--mixin', "${project.name}.mixins.json".toString(),
+                            '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
+                    ]
+                    properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true'
                 }
 
                 mods.create(project.name) {
@@ -276,6 +292,14 @@ def configure = {
                 workingDirectory file('build/server')
                 property 'forge.logging.console.level', 'debug'
 
+                if (nmod.mixin) {
+                    args += [
+                            '--mixin', "${project.name}.mixins.json".toString(),
+                            '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
+                    ]
+                    properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true'
+                }
+
                 mods.create(project.name) {
                     source sourceSets.main
                     if (api) {
@@ -286,8 +310,28 @@ def configure = {
         }
     }
 
+    repositories {
+        maven { url = 'https://maven.necauqua.dev' }
+    }
+
+    if (nmod.mixin) {
+        apply plugin: 'org.spongepowered.mixin'
+
+        mixin {
+            add sourceSets.main, "${project.name}.mixins.refmap.json"
+        }
+    }
+
+    configurations {
+        packaged
+        implementation.extendsFrom packaged
+    }
+
     dependencies {
         minecraft "net.minecraftforge:forge:${nmod.forge}"
+        if (nmod.mixin) {
+            annotationProcessor "org.spongepowered:mixin:${nmod.mixin}:processor"
+        }
     }
 
     // keep most of source/resource preprocessing for 1.12 compat
@@ -309,7 +353,7 @@ def configure = {
                 API_VERSION     : project.version.replaceAll('(?:.*?-)(.*?)\\.\\d+\\.\\d+(?:-.*?)?$', '$1'),
         ])
         // ensure there is stuff in compileJava.source in case there are other preprocessing tasks
-        mustRunAfter(compileJava.dependsOn.findAll { it instanceof Sync })
+        mustRunAfter(compileJava.dependsOn.findAll { it instanceof AbstractCopyTask })
     }
     compileJava.dependsOn += processSources
 
@@ -328,9 +372,19 @@ def configure = {
         rename '(accesstransformer\\.cfg|mods\\.toml|coremods\\.json)', 'META-INF/$1'
     }
 
+    afterEvaluate {
+        jar.from(configurations.packaged.collect { it.isDirectory() ? it : zipTree(it) }) {
+            exclude 'LICENSE*', 'META-INF/MANIFSET.MF', 'META-INF/maven/**', 'META-INF/*.RSA', 'META-INF/*.SF'
+        }
+    }
     jar {
         finalizedBy 'reobfJar'
         finalizedBy 'signJar'
+
+        if (api) {
+            from api.output.classesDirs
+        }
+        from 'LICENSE'
 
         manifest {
             if (nmod.coremod) {
@@ -348,18 +402,17 @@ def configure = {
                     'Implementation-Vendor'   : 'necauqua',
                     'Implementation-Timestamp': new Date().format('yyyy-MM-dd\'T\'HH:mm:ssZ')
             ])
+            if (nmod.mixin) {
+                attributes 'MixinConfigs' : "${project.name}.mixins.json"
+            }
         }
-        if (api) {
-            from api.output.classesDirs
-        }
-        from 'LICENSE'
     }
 
     task('sourcesJar', type: Jar) {
         classifier = 'src'
         from sourceSets.main.allJava
-        if (sourceSets.api) {
-            from sourceSets.api.allJava
+        if (api) {
+            from api.allJava
         }
     }
 
