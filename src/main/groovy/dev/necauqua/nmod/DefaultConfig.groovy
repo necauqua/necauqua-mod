@@ -256,6 +256,7 @@ def configure = {
                             '--mixin', "${project.name}.mixins.json".toString(),
                             '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
                     ]
+                    nmod.extraMixinConfigs.each { args += ['--mixin', it] }
                     properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true'
                 }
 
@@ -278,6 +279,7 @@ def configure = {
                             '--mixin', "${project.name}.mixins.json".toString(),
                             '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
                     ]
+                    nmod.extraMixinConfigs.each { args += ['--mixin', it] }
                     properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true'
                 }
 
@@ -297,6 +299,7 @@ def configure = {
                             '--mixin', "${project.name}.mixins.json".toString(),
                             '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
                     ]
+                    nmod.extraMixinConfigs.each { args += ['--mixin', it] }
                     properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true'
                 }
 
@@ -403,7 +406,7 @@ def configure = {
                     'Implementation-Timestamp': new Date().format('yyyy-MM-dd\'T\'HH:mm:ssZ')
             ])
             if (nmod.mixin) {
-                attributes 'MixinConfigs' : "${project.name}.mixins.json"
+                attributes 'MixinConfigs' : (["${project.name}.mixins.json"] + nmod.extraMixinConfigs).join(',')
             }
         }
     }

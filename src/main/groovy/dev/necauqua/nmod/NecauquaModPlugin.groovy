@@ -16,6 +16,8 @@ class Nmod {
     String licenseUrl = null
 
     String githubRepo = null
+
+    List<String> extraMixinConfigs = []
 }
 
 @SuppressWarnings('unused')
