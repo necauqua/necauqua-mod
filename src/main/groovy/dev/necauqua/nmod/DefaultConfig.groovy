@@ -267,29 +267,6 @@ def configure = {
                     }
                 }
             }
-            client2 {
-                workingDirectory file('build/run')
-                args += ['--username', 'necauqua2']
-                property 'forge.logging.console.level', 'debug'
-                if (nmod.coremod) {
-                    property 'fml.coreMods.load', nmod.coremod
-                }
-                if (nmod.mixin) {
-                    args += [
-                            '--mixin', "${project.name}.mixins.json".toString(),
-                            '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
-                    ]
-                    nmod.extraMixinConfigs.each { args += ['--mixin', it] }
-                    properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true'
-                }
-
-                mods.create(project.name) {
-                    source sourceSets.main
-                    if (api) {
-                        source api
-                    }
-                }
-            }
             server {
                 workingDirectory file('build/server')
                 property 'forge.logging.console.level', 'debug'
