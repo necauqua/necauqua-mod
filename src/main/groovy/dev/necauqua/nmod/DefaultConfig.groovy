@@ -243,20 +243,16 @@ def configure = {
         runs {
             client {
                 workingDirectory file('build/run')
-                args.addAll [
-                        '--username', 'necauqua',
-                        '--uuid', 'f98e9365-2c52-48c5-8647-6662f70b7e3d',
-                ]
+                args ['--username', 'necauqua']
+                args ['--uuid', 'f98e9365-2c52-48c5-8647-6662f70b7e3d']
                 property 'forge.logging.console.level', 'debug'
                 if (nmod.coremod) {
                     property 'fml.coreMods.load', nmod.coremod
                 }
                 if (nmod.mixin) {
-                    args.addAll [
-                            '--mixin', "${project.name}.mixins.json".toString(),
-                            '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
-                    ]
-                    nmod.extraMixinConfigs.each { args.addAll ['--mixin', it] }
+                    args ['--mixin', "${project.name}.mixins.json".toString()]
+                    args ['--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker']
+                    nmod.extraMixinConfigs.each { args ['--mixin', it] }
                     properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true'
                 }
 
@@ -272,11 +268,9 @@ def configure = {
                 property 'forge.logging.console.level', 'debug'
 
                 if (nmod.mixin) {
-                    args.addAll [
-                            '--mixin', "${project.name}.mixins.json".toString(),
-                            '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
-                    ]
-                    nmod.extraMixinConfigs.each { args.addAll ['--mixin', it] }
+                    args ['--mixin', "${project.name}.mixins.json".toString()]
+                    args ['--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker']
+                    nmod.extraMixinConfigs.each { args ['--mixin', it] }
                     properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true'
                 }
 
