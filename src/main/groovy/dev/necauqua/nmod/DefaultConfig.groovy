@@ -285,6 +285,7 @@ def configure = {
     }
 
     repositories {
+        mavenLocal()
         maven { url = 'https://maven.necauqua.dev' }
     }
 
