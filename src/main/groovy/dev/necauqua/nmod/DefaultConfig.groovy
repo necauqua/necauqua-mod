@@ -253,7 +253,7 @@ def configure = {
                     args '--mixin', "${project.name}.mixins.json".toString()
                     args '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
                     nmod.extraMixinConfigs.each { args '--mixin', it }
-                    properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true'
+                    properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true', 'mixin.env.disableRefMap': 'true'
                 }
 
                 mods.create(project.name) {
@@ -271,7 +271,7 @@ def configure = {
                     args '--mixin', "${project.name}.mixins.json".toString()
                     args '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
                     nmod.extraMixinConfigs.each { args '--mixin', it }
-                    properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true'
+                    properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true', 'mixin.env.disableRefMap': 'true'
                 }
 
                 mods.create(project.name) {
