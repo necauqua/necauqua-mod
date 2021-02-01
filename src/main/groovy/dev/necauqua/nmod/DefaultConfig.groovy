@@ -284,11 +284,6 @@ def configure = {
         }
     }
 
-    repositories {
-        mavenLocal()
-        maven { url = 'https://maven.necauqua.dev' }
-    }
-
     if (nmod.mixin) {
         apply plugin: 'org.spongepowered.mixin'
 
@@ -302,10 +297,31 @@ def configure = {
         implementation.extendsFrom packaged
     }
 
+    repositories {
+        mavenLocal()
+        maven { url = 'https://maven.necauqua.dev' }
+
+        // add the test mods folder if it's there
+        flatDir {
+            name 'test-mods'
+            dir file('test-mods')
+        }
+    }
+
     dependencies {
         minecraft "net.minecraftforge:forge:${nmod.forge}"
         if (nmod.mixin) {
             annotationProcessor "org.spongepowered:mixin:${nmod.mixin}:processor"
+        }
+
+        // load the test-mods if any
+        for (extraModJar in fileTree(dir: 'test-mods', include: '*.jar')) {
+            def basename = extraModJar.name.substring(0, extraModJar.name.length() - '.jar'.length())
+            def versionSep = basename.lastIndexOf('-')
+            assert versionSep != -1
+            def artifactId = basename.substring(0, versionSep)
+            def version = basename.substring(versionSep + 1)
+            runtimeOnly fg.deobf("test-mods:$artifactId:$version")
         }
     }
 
