@@ -37,7 +37,7 @@ class NecauquaModPlugin implements Plugin<Project> {
 
         // set it to project name by default, so that
         // explicitly setting it to null disables github stuff
-        nmod.githubRepo = project.name
+        nmod.githubRepo = project.name.toLowerCase()
 
         // and then we inject it straight into project to bypass default
         // declarative extension application - so it just the closure below

@@ -250,7 +250,7 @@ def configure = {
                     property 'fml.coreMods.load', nmod.coremod
                 }
                 if (nmod.mixin) {
-                    args '--mixin', "${project.name}.mixins.json".toString()
+                    args '--mixin', "${project.name.toLowerCase()}.mixins.json".toString()
                     args '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
                     nmod.extraMixinConfigs.each { args '--mixin', it }
                     properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true', 'mixin.env.disableRefMap': 'true'
@@ -268,7 +268,7 @@ def configure = {
                 property 'forge.logging.console.level', 'debug'
 
                 if (nmod.mixin) {
-                    args '--mixin', "${project.name}.mixins.json".toString()
+                    args '--mixin', "${project.name.toLowerCase()}.mixins.json".toString()
                     args '--tweakClass', 'org.spongepowered.asm.launch.MixinTweaker'
                     nmod.extraMixinConfigs.each { args '--mixin', it }
                     properties 'mixin.hotSwap': 'true', 'mixin.debug': 'true', 'mixin.env.disableRefMap': 'true'
@@ -288,7 +288,7 @@ def configure = {
         apply plugin: 'org.spongepowered.mixin'
 
         mixin {
-            add sourceSets.main, "${project.name}.mixins.refmap.json"
+            add sourceSets.main, "${project.name.toLowerCase()}.mixins.refmap.json"
         }
     }
 
@@ -394,7 +394,7 @@ def configure = {
                     'Implementation-Timestamp': new Date().format('yyyy-MM-dd\'T\'HH:mm:ssZ')
             ])
             if (nmod.mixin) {
-                attributes 'MixinConfigs' : (["${project.name}.mixins.json"] + nmod.extraMixinConfigs).join(',')
+                attributes 'MixinConfigs' : (["${project.name.toLowerCase()}.mixins.json"] + nmod.extraMixinConfigs).join(',')
             }
         }
     }
@@ -540,7 +540,7 @@ def configure = {
                             if (!nmod.description) {
                                 description = data.description
                             }
-                            if (!nmod.license) {
+                            if (!nmod.license && data.license) {
                                 licenses {
                                     license {
                                         name = data.license.name
