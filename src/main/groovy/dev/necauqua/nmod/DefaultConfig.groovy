@@ -484,7 +484,7 @@ def configure = {
         publications {
             maven(MavenPublication) {
                 groupId = project.group
-                artifactId = project.archivesBaseName
+                artifactId = project.archivesBaseName.toLowerCase()
                 version = project.version
 
                 // fix for https://github.com/MinecraftForge/ForgeGradle/issues/584
