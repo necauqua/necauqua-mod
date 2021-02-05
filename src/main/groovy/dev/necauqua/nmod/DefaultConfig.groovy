@@ -465,7 +465,7 @@ def configure = {
         tasks['curseforge'].group = 'publishing'
     }
 
-    if (nmod.githubRepo && project.hasProperty('githubToken') && !project.version.contains('git')) {
+    if (nmod.githubRepo && project.hasProperty('githubToken') && !isGit) {
         github {
             token = project.githubToken
             owner = 'necauqua'
@@ -474,7 +474,8 @@ def configure = {
             name = tagName
             body = latestChangelog
             assets = [jar.archivePath]
-            prerelease = isBeta || isGit
+            prerelease = isBeta
+            targetCommitish = 'main' // omg github fix ur shit
         }
         tasks['githubRelease'].group = 'publishing'
         tasks['githubRelease'].dependsOn += 'build'
