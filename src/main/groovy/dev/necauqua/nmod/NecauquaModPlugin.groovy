@@ -9,7 +9,7 @@ class Nmod {
     String version = null
     String forge = null
     String mixin = null
-    String mappings = null
+    def mappings = null // can be string or map
     String coremod = null
     String description = null
     String license = null
@@ -17,6 +17,7 @@ class Nmod {
 
     String githubRepo = null
 
+    int javaVersion = 8
     List<String> extraMixinConfigs = []
 }
 

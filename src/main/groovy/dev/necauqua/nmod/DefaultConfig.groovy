@@ -4,7 +4,7 @@ import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import groovy.transform.Field
 import groovy.transform.Immutable
-import net.minecraftforge.gradle.common.task.SignJar
+import net.minecraftforge.gradle.common.tasks.SignJar
 import org.apache.tools.ant.filters.ReplaceTokens
 import org.gradle.api.DefaultTask
 import org.gradle.api.publish.maven.MavenPublication
@@ -15,6 +15,7 @@ import org.gradle.api.tasks.Sync
 import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.api.tasks.options.Option
+import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 // unsurprisingly, groovy continues to show how shit it is
 class McVersions {
@@ -211,13 +212,14 @@ def configure = {
     def forgemc = nmod.forge.split('-')[0]
     def mcversions = McVersions.get(version.split('-')[0])
 
-    idea.project.jdkName =
-            sourceCompatibility =
-                    targetCompatibility =
-                            compileJava.sourceCompatibility =
-                                    compileJava.targetCompatibility = '1.8' // omfg
+    java.toolchain.languageVersion.set(JavaLanguageVersion.of(nmod.javaVersion))
+    idea.project.jdkName = Integer.toString(nmod.javaVersion)
 
-    idea.module.inheritOutputDirs = true
+    idea.module {
+        inheritOutputDirs = false
+        outputDir = compileJava.destinationDirectory.getAsFile().get()
+        testOutputDir = compileTestJava.destinationDirectory.getAsFile().get()
+    }
 
     def api = sourceSets.findByName('api')
 
@@ -228,13 +230,22 @@ def configure = {
         }
         configurations {
             apiCompile.extendsFrom(compile)
+            apiImplementation.extendsFrom(implementation)
         }
+    }
+
+    sourceSets.main.resources {
+        srcDir 'src/generated/resources'
     }
 
     def at = file('src/main/resources/accesstransformer.cfg')
 
     minecraft {
-        mappings channel: 'snapshot', version: nmod.mappings
+        if (nmod.mappings instanceof String) {
+            mappings channel: 'official', version: nmod.mappings
+        } else {
+            mappings nmod.mappings
+        }
 
         if (at.exists()) {
             accessTransformer = at
@@ -349,14 +360,6 @@ def configure = {
     compileJava.dependsOn += processSources
 
     processResources {
-        inputs.property('version', project.version)
-        from(sourceSets.main.resources.srcDirs) {
-            include 'mcmod.info'
-            expand 'version': project.version, 'mcversion': forgemc
-        }
-        from(sourceSets.main.resources.srcDirs) {
-            exclude 'mcmod.info'
-        }
         if (api) {
             from(api.resources.srcDirs)
         }
@@ -400,7 +403,7 @@ def configure = {
     }
 
     task('sourcesJar', type: Jar) {
-        classifier = 'src'
+        archiveClassifier.set('src')
         from sourceSets.main.allJava
         if (api) {
             from api.allJava
@@ -417,13 +420,13 @@ def configure = {
         }
 
         task('javadocJar', type: Jar, dependsOn: 'javadocs') {
-            classifier = 'javadoc'
+            archiveClassifier.set('javadoc')
             from javadoc.destinationDir
         }
 
         task('apiJar', type: Jar) {
+            archiveClassifier.set('api')
             from api.output
-            classifier = 'api'
         }
 
         artifacts {

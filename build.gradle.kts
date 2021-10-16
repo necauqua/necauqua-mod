@@ -4,22 +4,24 @@ plugins {
 }
 
 group = "dev.necauqua"
-version = "0.6.3"
+version = "0.7.0"
 
 gradlePlugin.plugins.create("necauqua-mod") {
     id = "dev.necauqua.nmod"
     displayName = "necauqua mod"
-    description = "Common configuration for necauquas Minecraft mods"
+    description = "Common Gradle configuration for Minecraft mods made by necauqua"
     implementationClass = "dev.necauqua.nmod.NecauquaModPlugin"
 }
 
 repositories {
-    jcenter()
+    mavenCentral()
     maven { url = uri("https://maven.necauqua.dev") }
 }
 
 dependencies {
-    implementation("net.minecraftforge.gradle:ForgeGradle:3.+")
+    runtimeOnly(gradleApi())
+    runtimeOnly(localGroovy())
+    implementation("net.minecraftforge.gradle:ForgeGradle:5.+") { isChanging = true }
     implementation("co.riiid.gradle:co.riiid.gradle.gradle.plugin:0.4.1")
     implementation("com.matthewprenger.cursegradle:com.matthewprenger.cursegradle.gradle.plugin:1.4.0")
     implementation("org.spongepowered:mixingradle:0.7-SNAPSHOT")
