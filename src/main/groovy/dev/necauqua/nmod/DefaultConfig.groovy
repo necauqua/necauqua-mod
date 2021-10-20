@@ -177,7 +177,6 @@ def before = {
     apply plugin: 'idea'
     apply plugin: 'net.minecraftforge.gradle'
     apply plugin: 'com.matthewprenger.cursegradle'
-    apply plugin: 'co.riiid.gradle'
 }
 
 
@@ -203,8 +202,12 @@ def configure = {
         doLast { print(makeForgeUpdates(tags, template)) }
     }
 
-    def latestChangelog = tags ? section(tags[0].log) : '\n'
-    latestChangelog = latestChangelog.substring(0, latestChangelog.length() - 1)
+    def lastChangelog = tags ? section(tags[0].log) : '\n'
+    lastChangelog = lastChangelog.substring(0, lastChangelog.length() - 1)
+
+    task('getLastChangelog') {
+        doLast { print(lastChangelog) }
+    }
 
     version = tags ? tags[0].name.substring(1) : nmod.version
     group = 'dev.necauqua.mods'
@@ -458,7 +461,7 @@ def configure = {
             apiKey = project.curseApiKey
             project {
                 id = nmod.curseID
-                changelog = latestChangelog
+                changelog = lastChangelog
                 changelogType = 'markdown'
                 releaseType = isGit ? 'alpha' : isBeta ? 'beta' : 'release'
                 mcversions.each { addGameVersion(it) }
@@ -466,22 +469,6 @@ def configure = {
             }
         }
         tasks['curseforge'].group = 'publishing'
-    }
-
-    if (nmod.githubRepo && project.hasProperty('githubToken') && !isGit) {
-        github {
-            token = project.githubToken
-            owner = 'necauqua'
-            repo = nmod.githubRepo
-            tagName = "v${project.version}"
-            name = tagName
-            body = latestChangelog
-            assets = [jar.archivePath]
-            prerelease = isBeta
-            targetCommitish = 'main' // omg github fix ur shit
-        }
-        tasks['githubRelease'].group = 'publishing'
-        tasks['githubRelease'].dependsOn += 'build'
     }
 
     publishing {
