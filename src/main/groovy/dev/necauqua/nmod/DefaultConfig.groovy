@@ -80,7 +80,7 @@ static List<Tag> getUnreleasedChangelog(version, String rootCommit = null) {
 }
 
 static List<Tag> getChangelog(version, String rootCommit = null) {
-    def cmd = ['for-each-ref', '--sort=-creatordate', '--format', '%(refname)|%(creatordate:unix)', 'refs/tags', '--merged']
+    def cmd = ['for-each-ref', '--sort=-creatordate', '--format', '%(refname)|%(creatordate:unix)', 'refs/tags']
     if (rootCommit) {
         cmd += ['--contains', rootCommit]
     }
@@ -90,6 +90,7 @@ static List<Tag> getChangelog(version, String rootCommit = null) {
     if (tags.isEmpty()) {
         return getUnreleasedChangelog(version, rootCommit)
     }
+    tags.removeAll { !(it =~ /^refs\/tags\/v\d+\.\d+/).find() }
 
     def (lastTag, lastDate) = tags.removeAt(0).split('\\|')
 
@@ -216,7 +217,7 @@ def configure = {
     def mcversions = McVersions.get(version.split('-')[0])
 
     java.toolchain.languageVersion.set(JavaLanguageVersion.of(nmod.javaVersion))
-    idea.project.jdkName = Integer.toString(nmod.javaVersion)
+    idea.project?.jdkName = Integer.toString(nmod.javaVersion)
 
     idea.module {
         inheritOutputDirs = false
