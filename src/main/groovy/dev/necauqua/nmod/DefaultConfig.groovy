@@ -70,16 +70,16 @@ class Tag {
     Map<String, List<String>> log
 }
 
-static List<Tag> getUnreleasedChangelog(version, String rootCommit = null) {
+static List<Tag> getUnreleasedChangelog(String rootCommit = null) {
     def unreleasedLog = parseLog('HEAD', rootCommit)
     if (unreleasedLog.isEmpty()) {
         return []
     }
     def (commit, date) = git(['log', '-1', '--format=%h|%ct'])[0].split('\\|').toList()
-    return [new Tag("v${version}-git-$commit", date.toInteger(), unreleasedLog)]
+    return [new Tag("Unreleased", date.toInteger(), unreleasedLog)]
 }
 
-static List<Tag> getChangelog(version, String rootCommit = null) {
+static List<Tag> getChangelog(String rootCommit = null) {
     def cmd = ['for-each-ref', '--sort=-creatordate', '--format', '%(refname)|%(creatordate:unix)', 'refs/tags']
     if (rootCommit) {
         cmd += ['--contains', rootCommit]
@@ -88,7 +88,7 @@ static List<Tag> getChangelog(version, String rootCommit = null) {
 
     // no tags -> everything (that we have) is unreleased
     if (tags.isEmpty()) {
-        return getUnreleasedChangelog(version, rootCommit)
+        return getUnreleasedChangelog(rootCommit)
     }
     tags.removeAll { !(it =~ /^refs\/tags\/v\d+\.\d+/).find() }
 
@@ -96,7 +96,7 @@ static List<Tag> getChangelog(version, String rootCommit = null) {
 
     tags += rootCommit ? (rootCommit + '|') : null
 
-    def releases = getUnreleasedChangelog(version, lastTag)
+    def releases = getUnreleasedChangelog(lastTag)
 
     for (t in tags) {
         def (tag, date) = t ? t.split('\\|').toList() : [null, '']
@@ -193,7 +193,7 @@ class Templated extends DefaultTask {
 @Field
 def configure = {
 
-    def tags = getChangelog(nmod.version)
+    def tags = getChangelog()
 
     task('generateChangelog', type: Templated) {
         doLast { print(makeMarkdown(tags, template)) }
