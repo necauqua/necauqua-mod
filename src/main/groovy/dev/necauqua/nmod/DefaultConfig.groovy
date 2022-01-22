@@ -76,7 +76,7 @@ static List<Tag> getUnreleasedChangelog(String rootCommit = null) {
         return []
     }
     def (commit, date) = git(['log', '-1', '--format=%h|%ct'])[0].split('\\|').toList()
-    return [new Tag(" Unreleased ($commit)", date.toInteger(), unreleasedLog)]
+    return [new Tag(' Unreleased (' + commit + ')', date.toInteger(), unreleasedLog)]
 }
 
 static List<Tag> getChangelog(String rootCommit = null) {
