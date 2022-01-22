@@ -140,7 +140,7 @@ static def makeForgeUpdates(List<Tag> changelog, String template = null) {
     def result = template ? new JsonSlurper().parse(new File(template)) : [:]
     def versions = [:]
     for (release in changelog) {
-        if (release.contains('Unreleased')) {
+        if (release.name.contains('Unreleased')) {
             continue
         }
         def version = release.name.substring(1)
