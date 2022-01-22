@@ -138,33 +138,22 @@ static def makeMarkdown(List<Tag> changelog, String template = null) {
 
 static def makeForgeUpdates(List<Tag> changelog, String template = null) {
     def result = template ? new JsonSlurper().parse(new File(template)) : [:]
-
-    def recomended = [:]
-
+    def versions = [:]
     for (release in changelog) {
+        if (release.name == 'Unreleased') {
+            continue
+        }
         def version = release.name.substring(1)
         for (mc in McVersions.get(version.split('-')[0])) {
-            if (!release.name.contains('git')) {
-                recomended.computeIfAbsent(mc) { version }
-            }
+            versions.computeIfAbsent(mc) { version }
             def s = section(release.log)
             result.computeIfAbsent(mc, { [:] })[version] = s.substring(0, s.length() - 2)
         }
     }
-
     def promos = result.computeIfAbsent('promos') { [:] }
-
-    recomended.forEach { mc, mod ->
+    versions.forEach { mc, mod ->
         promos["${mc}-recommended"] = mod
         promos["${mc}-latest"] = mod
-    }
-
-    def latest = changelog[0]?.name
-    if (latest?.contains('git')) {
-        def version = latest.substring(1)
-        for (mc in McVersions.get(version.split('-')[0])) {
-            promos["${mc}-latest"] = version
-        }
     }
     return JsonOutput.toJson(result)
 }
@@ -455,7 +444,6 @@ def configure = {
     }
 
     def isBeta = project.version.contains('-beta') || project.version.contains('-rc')
-    def isGit = project.version.contains('-git')
 
     if (nmod.curseID && project.hasProperty('curseApiKey')) {
         curseforge {
@@ -464,7 +452,7 @@ def configure = {
                 id = nmod.curseID
                 changelog = lastChangelog
                 changelogType = 'markdown'
-                releaseType = isGit ? 'alpha' : isBeta ? 'beta' : 'release'
+                releaseType = isBeta ? 'beta' : 'release'
                 mcversions.each { addGameVersion(it) }
                 mainArtifact(jar)
             }
