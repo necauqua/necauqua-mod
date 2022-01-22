@@ -76,7 +76,7 @@ static List<Tag> getUnreleasedChangelog(String rootCommit = null) {
         return []
     }
     def (commit, date) = git(['log', '-1', '--format=%h|%ct'])[0].split('\\|').toList()
-    return [new Tag("Unreleased", date.toInteger(), unreleasedLog)]
+    return [new Tag(" Unreleased ($commit)", date.toInteger(), unreleasedLog)]
 }
 
 static List<Tag> getChangelog(String rootCommit = null) {
@@ -140,7 +140,7 @@ static def makeForgeUpdates(List<Tag> changelog, String template = null) {
     def result = template ? new JsonSlurper().parse(new File(template)) : [:]
     def versions = [:]
     for (release in changelog) {
-        if (release.name == 'Unreleased') {
+        if (release.contains('Unreleased')) {
             continue
         }
         def version = release.name.substring(1)
@@ -199,7 +199,7 @@ def configure = {
         doLast { print(lastChangelog) }
     }
 
-    version = tags ? tags[0].name.substring(1) : nmod.version
+    version = nmod.version
     group = 'dev.necauqua.mods'
 
     def forgemc = nmod.forge.split('-')[0]
