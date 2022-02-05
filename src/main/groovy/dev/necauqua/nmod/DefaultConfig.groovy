@@ -36,7 +36,7 @@ class McVersions {
     }
 }
 
-static List<String> git(args) {
+static List<String> git(List<String> args) {
     def res = ['git', *args].execute().text.split('\n').toList()
     return res != [''] ? res : []
 }
@@ -199,11 +199,24 @@ def configure = {
         doLast { print(lastChangelog) }
     }
 
-    version = nmod.version
+    def mcversion = nmod.version.split('-')[0]
+
+    def tag = git(['describe', '--exact-match', 'HEAD'])
+    if (tag.isEmpty()) {
+        def hash = git(['rev-parse', '--short', 'HEAD'])
+        if (hash.isEmpty()) { // new repo with no HEAD? no git at all? etc
+            version = nmod.version
+        } else {
+            version = mcversion + '-' + hash[0]
+        }
+    } else {
+        version = (tag =~ /^v\d+\.\d+/).find() ? tag : nmod.version
+    }
+
     group = 'dev.necauqua.mods'
 
     def forgemc = nmod.forge.split('-')[0]
-    def mcversions = McVersions.get(version.split('-')[0])
+    def mcversions = McVersions.get(mcversion)
 
     java.toolchain.languageVersion.set(JavaLanguageVersion.of(nmod.javaVersion))
     idea.project?.jdkName = Integer.toString(nmod.javaVersion)
