@@ -1,0 +1,60 @@
+{
+  "nodes": {
+    "basic-dev-shell": {
+      "inputs": {
+        "flake-utils": "flake-utils",
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1673412513,
+        "narHash": "sha256-LBWBY8sD2ggUU9UrTO51/b771YzSFuLtcM7vI5+baA0=",
+        "owner": "necauqua",
+        "repo": "basic-dev-shell",
+        "rev": "af807760178e12bd93c642b539a515c71a7939c5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "necauqua",
+        "repo": "basic-dev-shell",
+        "type": "github"
+      }
+    },
+    "flake-utils": {
+      "locked": {
+        "lastModified": 1667395993,
+        "narHash": "sha256-nuEHfE/LcWyuSWnS8t12N1wc105Qtau+/OdUAjtQ0rA=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "5aed5285a952e0b949eb3ba02c12fa4fcfef535f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1674011276,
+        "narHash": "sha256-xNQ5cXu50Q10bjwh7sThFGB7gjt4oB23dDsEllR3x7k=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "9428672eaaff08a4b289668bee4911da52dc0243",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "basic-dev-shell": "basic-dev-shell"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

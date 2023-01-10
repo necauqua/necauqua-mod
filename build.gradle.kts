@@ -14,7 +14,6 @@ gradlePlugin.plugins.create("necauqua-mod") {
 }
 
 repositories {
-    mavenCentral()
     maven { url = uri("https://maven.necauqua.dev") }
 }
 

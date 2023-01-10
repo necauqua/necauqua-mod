@@ -1,4 +1,7 @@
 /.gradle
 /.idea
 /build
+/.direnv
 
+# opened this project in vscode once, lol what is this
+/bin
