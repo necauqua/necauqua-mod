@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "dev.necauqua"
-version = "0.8.0"
+version = "0.8.1"
 
 gradlePlugin.plugins.create("necauqua-mod") {
     id = "dev.necauqua.nmod"
@@ -21,8 +21,9 @@ dependencies {
     runtimeOnly(gradleApi())
     runtimeOnly(localGroovy())
     implementation("net.minecraftforge.gradle:ForgeGradle:5.1.+") { isChanging = true }
-    implementation("com.matthewprenger.cursegradle:com.matthewprenger.cursegradle.gradle.plugin:1.4.0")
     implementation("org.spongepowered:mixingradle:0.7-SNAPSHOT")
+    implementation("com.matthewprenger.cursegradle:com.matthewprenger.cursegradle.gradle.plugin:1.4.0")
+    implementation("com.modrinth.minotaur:com.modrinth.minotaur.gradle.plugin:2.+")
 }
 
 publishing {

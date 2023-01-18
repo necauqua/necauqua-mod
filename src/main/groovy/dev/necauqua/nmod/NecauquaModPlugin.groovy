@@ -6,6 +6,7 @@ import org.gradle.api.Project
 
 class Nmod {
     String curseID = null
+    String modrinthID = null
     String version = null
     String forge = null
     String mixin = null

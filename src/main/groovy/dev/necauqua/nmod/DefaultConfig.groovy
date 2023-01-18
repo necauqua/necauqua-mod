@@ -167,6 +167,7 @@ def before = {
     apply plugin: 'idea'
     apply plugin: 'net.minecraftforge.gradle'
     apply plugin: 'com.matthewprenger.cursegradle'
+    apply plugin: 'com.modrinth.minotaur'
 }
 
 
@@ -200,6 +201,7 @@ def configure = {
     }
 
     def mcversion = nmod.version.split('-')[0]
+    def isGit = false
 
     def tag = git(['describe', '--exact-match', 'HEAD'])
     if (tag.isEmpty()) {
@@ -208,6 +210,7 @@ def configure = {
             version = nmod.version
         } else {
             version = mcversion + '-' + hash[0]
+            isGit = true
         }
     } else {
         version = (tag =~ /^v\d+\.\d+/).find() ? tag : nmod.version
@@ -465,12 +468,23 @@ def configure = {
                 id = nmod.curseID
                 changelog = lastChangelog
                 changelogType = 'markdown'
-                releaseType = isBeta ? 'beta' : 'release'
+                releaseType = isGit ? 'alpha' : isBeta ? 'beta' : 'release'
                 mcversions.each { addGameVersion(it) }
                 mainArtifact(jar)
             }
         }
         tasks['curseforge'].group = 'publishing'
+    }
+
+    if (nmod.modrinthID && project.hasProperty('modrinthToken')) {
+        modrinth {
+            projectId = nmod.modrinthID
+            token = project.modrinthToken
+            changelog = lastChangelog
+            uploadFile = jar
+            versionType = isGit ? 'alpha' : isBeta ? 'beta' : 'release'
+            gameVersions = mcversions
+        }
     }
 
     publishing {
