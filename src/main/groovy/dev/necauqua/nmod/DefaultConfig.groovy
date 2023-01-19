@@ -1,167 +1,61 @@
 package dev.necauqua.nmod
 
-import groovy.json.JsonOutput
+import com.matthewprenger.cursegradle.CurseExtension
+import com.modrinth.minotaur.ModrinthExtension
 import groovy.json.JsonSlurper
 import groovy.transform.Field
-import groovy.transform.Immutable
 import net.minecraftforge.gradle.common.tasks.SignJar
+import net.minecraftforge.gradle.common.util.MinecraftExtension
 import org.apache.tools.ant.filters.ReplaceTokens
-import org.gradle.api.DefaultTask
+import org.gradle.api.Project
+import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.AbstractCopyTask
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.Sync
-import org.gradle.api.tasks.bundling.Jar
+import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.javadoc.Javadoc
-import org.gradle.api.tasks.options.Option
+import org.gradle.jvm.tasks.Jar
 import org.gradle.jvm.toolchain.JavaLanguageVersion
-
-// unsurprisingly, groovy continues to show how shit it is
-class McVersions {
-    static def all = new JsonSlurper()
-            .parse(new URL('https://launchermeta.mojang.com/mc/game/version_manifest.json'))
-            .versions
-            .findAll { it.type == 'release' }
-            .collect { it.id.count('.') == 1 ? it.id + '.0' : it.id }
-
-    static def get(modmc) {
-        def versions = all
-                .findAll { it.startsWith(modmc) }
-                .collect { it.endsWith('.0') ? it.substring(0, it.length() - 2) : it }
-        if (versions.isEmpty()) {
-            throw new IllegalArgumentException('Mod version didn\'t match any minecraft versions!')
-        }
-        return versions
-    }
-}
+import org.gradle.plugins.ide.idea.model.IdeaModel
+import org.spongepowered.asm.gradle.plugins.MixinExtension
 
 static List<String> git(List<String> args) {
     def res = ['git', *args].execute().text.split('\n').toList()
     return res != [''] ? res : []
 }
 
-static Map<String, List<String>> parseLog(String startRef = null, String endRef = null) {
-    def cmd = ['log', '--reverse', '--format=%b']
-    if (startRef) {
-        cmd += startRef
-    }
-    if (endRef) {
-        cmd += ('^' + endRef)
-    }
-    Map<String, List<String>> log = [:]
-    List<String> current = []
-    for (line in git(cmd)) {
-        if (line.endsWith(':')) {
-            line = line.substring(0, line.length() - 1).toLowerCase()
-            current = log.computeIfAbsent(line) { [] }
-        } else if (line.startsWith('  - ')) {
-            current.add(line.substring(4))
-        }
-    }
-    log.values().removeIf { it.isEmpty() }
-    return log
+// this is literally just TypeScript at this point..
+interface ExtendedProject extends Project {
+    Nmod nmod = null
+    IdeaModel idea = null
+    JavaPluginExtension java = null
+    JavaCompile compileJava = null
+    JavaCompile compileTestJava = null
+    SourceSetContainer sourceSets = null
+    Jar jar = null
+
+    // well surprisingly intellij does support gradle domain objects not in gradle scripts
+    // but not doing `container { .. }` configuration calls sadly, only `container.<name>`
+    // it would literally be perfect if it worked :(
+    Jar jar(@DelegatesTo(Jar) Closure c)
+    MinecraftExtension minecraft(@DelegatesTo(MinecraftExtension) Closure c)
+    MixinExtension mixin(@DelegatesTo(MixinExtension) Closure c)
+    ModrinthExtension modrinth(@DelegatesTo(ModrinthExtension) Closure c)
+    CurseExtension curseforge(@DelegatesTo(CurseExtension) Closure c)
+
+//    PublishingExtension publishing(@DelegatesTo(PublishingExtension) Closure c)
+    // ^ it's worse with it than without it
 }
 
-@Immutable
-class Tag {
-    String name
-    int date
-    Map<String, List<String>> log
-}
-
-static List<Tag> getUnreleasedChangelog(String rootCommit = null) {
-    def unreleasedLog = parseLog('HEAD', rootCommit)
-    if (unreleasedLog.isEmpty()) {
-        return []
-    }
-    def (commit, date) = git(['log', '-1', '--format=%h|%ct'])[0].split('\\|').toList()
-    return [new Tag(' Unreleased (' + commit + ')', date.toInteger(), unreleasedLog)]
-}
-
-static List<Tag> getChangelog(String rootCommit = null) {
-    def cmd = ['for-each-ref', '--sort=-creatordate', '--format', '%(refname)|%(creatordate:unix)', 'refs/tags']
-    if (rootCommit) {
-        cmd += ['--contains', rootCommit]
-    }
-    def tags = git(cmd)
-
-    // no tags -> everything (that we have) is unreleased
-    if (tags.isEmpty()) {
-        return getUnreleasedChangelog(rootCommit)
-    }
-    tags.removeAll { !(it =~ /^refs\/tags\/v\d+\.\d+/).find() }
-
-    def (lastTag, lastDate) = tags.removeAt(0).split('\\|')
-
-    tags += rootCommit ? (rootCommit + '|') : null
-
-    def releases = getUnreleasedChangelog(lastTag)
-
-    for (t in tags) {
-        def (tag, date) = t ? t.split('\\|').toList() : [null, '']
-
-        def releaseLog = parseLog(lastTag, tag)
-        if (!releaseLog.isEmpty()) {
-            releases += new Tag(lastTag.substring(10), lastDate.toInteger(), releaseLog)
-            lastTag = tag
-            lastDate = date
-        }
-    }
-    return releases
-}
-
-static def section(Map<String, List<String>> log) {
-    def s = new StringBuilder()
-    for (key in log.keySet().toSorted()) {
-        s << "### ${key.capitalize()}\n"
-        for (item in log[key]) {
-            s << "  - $item\n"
-        }
-    }
-    s << '\n'
-    return s.toString()
-}
-
-static def makeMarkdown(List<Tag> changelog, String template = null) {
-    def s = new StringBuilder()
-    for (release in changelog) {
-        s << '## [' << release.name.substring(1) << '] '
-        s << new Date(release.date * 1000L).format('1yyyy-MM-dd')
-        s << '\n' << section(release.log)
-    }
-    if (s.length() != 0) {
-        s.setLength(s.length() - 1) // strip last section newline
-    }
-    return String.format(template ? new File(template).text : '%s', s.toString())
-}
-
-static def makeForgeUpdates(List<Tag> changelog, String template = null) {
-    def result = template ? new JsonSlurper().parse(new File(template)) : [:]
-    def versions = [:]
-    for (release in changelog) {
-        if (release.name.contains('Unreleased')) {
-            continue
-        }
-        def version = release.name.substring(1)
-        for (mc in McVersions.get(version.split('-')[0])) {
-            versions.computeIfAbsent(mc) { version }
-            def s = section(release.log)
-            result.computeIfAbsent(mc, { [:] })[version] = s.substring(0, s.length() - 2)
-        }
-    }
-    def promos = result.computeIfAbsent('promos') { [:] }
-    versions.forEach { mc, mod ->
-        promos["${mc}-recommended"] = mod
-        promos["${mc}-latest"] = mod
-    }
-    return JsonOutput.toJson(result)
+static def hint(@DelegatesTo(ExtendedProject) Closure c) {
+    return c
 }
 
 // the lowest possible indentation level for pseudo-gradle config
 // without evaluating groovy from a file
 @Field
-def before = {
+static def before = hint {
     apply plugin: 'java'
     apply plugin: 'maven-publish'
     apply plugin: 'idea'
@@ -170,56 +64,17 @@ def before = {
     apply plugin: 'com.modrinth.minotaur'
 }
 
-
-class Templated extends DefaultTask {
-
-    @Option(option = 'template', description = 'The template file used for this task.')
-    @Input
-    @Optional
-    String template = null
-}
-
-
 @Field
-def configure = {
+static Closure configure = hint {
 
-    def tags = getChangelog()
-
-    task('generateChangelog', type: Templated) {
-        doLast { print(makeMarkdown(tags, template)) }
+    def gitDescribe = git(['describe', '--first-parent'])
+    if (gitDescribe.isEmpty()) {
+        // new repo with no HEAD? no git at all? etc
+        throw new IllegalStateException('git describe failed')
     }
-
-    task('generateForgeUpdates', type: Templated) {
-        doLast { print(makeForgeUpdates(tags, template)) }
-    }
-
-    def lastChangelog = tags ? section(tags[0].log) : '\n'
-    lastChangelog = lastChangelog.substring(0, lastChangelog.length() - 1)
-
-    task('getLastChangelog') {
-        doLast { print(lastChangelog) }
-    }
-
-    def mcversion = nmod.version.split('-')[0]
-    def isGit = false
-
-    def tag = git(['describe', '--exact-match', 'HEAD'])
-    if (tag.isEmpty()) {
-        def hash = git(['rev-parse', '--short', 'HEAD'])
-        if (hash.isEmpty()) { // new repo with no HEAD? no git at all? etc
-            version = nmod.version
-        } else {
-            version = mcversion + '-' + hash[0]
-            isGit = true
-        }
-    } else {
-        version = (tag =~ /^v\d+\.\d+/).find() ? tag : nmod.version
-    }
+    version = gitDescribe.first().replaceFirst(~/^v/, '')
 
     group = 'dev.necauqua.mods'
-
-    def forgemc = nmod.forge.split('-')[0]
-    def mcversions = McVersions.get(mcversion)
 
     java.toolchain.languageVersion.set(JavaLanguageVersion.of(nmod.javaVersion))
     idea.project?.jdkName = Integer.toString(nmod.javaVersion)
@@ -230,7 +85,7 @@ def configure = {
         testOutputDir = compileTestJava.destinationDirectory.getAsFile().get()
     }
 
-    def api = sourceSets.findByName('api')
+    def api = sourceSets.named('api').getOrNull()
 
     if (api) {
         sourceSets.main {
@@ -346,7 +201,7 @@ def configure = {
     }
 
     // keep most of source/resource preprocessing for 1.12 compat
-    task('processSources', type: Sync) {
+    tasks.register('processSources', Sync) {
         def processedFolder = buildDir.toPath().resolve('processSources')
 
         inputs.property('version', project.version)
@@ -357,9 +212,9 @@ def configure = {
 
         filter(ReplaceTokens, tokens: [
                 VERSION         : project.version,
-                MC_VERSION_RANGE: (mcversions.size() == 1 ?
-                        "[${mcversions.first()}]" :
-                        "[${mcversions.last()},${mcversions.first()}]").toString(),
+                MC_VERSION_RANGE: (nmod.mcversions.size() == 1 ?
+                        "[${nmod.mcversions.first()}]" :
+                        "[${nmod.mcversions.last()},${nmod.mcversions.first()}]").toString(),
                 // here we strip the .minor.patch-detail suffix (meh, shut up, I love regex)
                 API_VERSION     : project.version.replaceAll('(?:.*?-)(.*?)\\.\\d+\\.\\d+(?:-.*?)?$', '$1'),
         ])
@@ -411,7 +266,7 @@ def configure = {
         }
     }
 
-    task('sourcesJar', type: Jar) {
+    tasks.register('sourcesJar', Jar) {
         archiveClassifier.set('src')
         from sourceSets.main.allJava
         if (api) {
@@ -422,18 +277,19 @@ def configure = {
     artifacts.archives sourcesJar
 
     if (api) {
-        task('javadocs', type: Javadoc) {
+        tasks.register('javadocs', Javadoc) {
             classpath = sourceSets.main.compileClasspath
             source = api.java
             options.addStringOption('Xdoclint:none', '-quiet')
         }
 
-        task('javadocJar', type: Jar, dependsOn: 'javadocs') {
+        tasks.register('javadocJar', Jar) {
+            dependsOn tasks.javadocs
             archiveClassifier.set('javadoc')
             from javadoc.destinationDir
         }
 
-        task('apiJar', type: Jar) {
+        tasks.register('apiJar', Jar) {
             archiveClassifier.set('api')
             from api.output
         }
@@ -444,7 +300,8 @@ def configure = {
         }
     }
 
-    task('signJar', type: SignJar, dependsOn: 'reobfJar') {
+    tasks.register('signJar', SignJar) {
+        dependsOn tasks.reobfJar
         onlyIf { project.hasProperty('keyStore') }
         // gradle executes the whole task body (well it cant stop execution after onlyIf{} call)
         // and then flips out on project.keyStore if it has no keyStore
@@ -455,35 +312,67 @@ def configure = {
         alias = project.keyStoreAlias
         storePass = project.keyStorePass
         keyPass = project.keyStoreKeyPass
-        inputFile = jar.archivePath
-        outputFile = jar.archivePath
+        inputFile = jar.archiveFile
+        outputFile = jar.archiveFile
     }
 
+    def dryRun = System.getenv('DRY_RUN') == "true"
+
+    def isGit = git(['describe', '--first-parent', '--exact-match']).isEmpty()
     def isBeta = project.version.contains('-beta') || project.version.contains('-rc')
+    def publishType = isGit ? 'alpha' : isBeta ? 'beta' : 'release'
+
+    def changelogText
+    try {
+        changelogText = file('last-changelog.md').text
+    } catch (FileNotFoundException ignored) {
+        // omegalul
+        // this is obviously for rare cases when I'm publishing from my machine
+        // and don't have the last-changelog.md in place, as it happens within CI
+        def common = [
+                "docker", "run", "--rm",
+                "--workdir", "/workdir",
+                "-v", "${project.rootDir}:/workdir",
+                "-v", "/tmp:/tmp",
+                "ghcr.io/necauqua/changelogs:v1"]
+        (common + ["extract", "/tmp/changelog.json", ""])
+                .execute()
+                .waitFor()
+        (common + ["render", "/tmp/changelog.json", "", "", "", "/tmp/last-changelog.md", "true", ""])
+                .execute()
+                .waitFor()
+        changelogText = file('/tmp/last-changelog.md').text
+    }
 
     if (nmod.curseID && project.hasProperty('curseApiKey')) {
         curseforge {
             apiKey = project.curseApiKey
             project {
                 id = nmod.curseID
-                changelog = lastChangelog
+                changelog = changelogText
                 changelogType = 'markdown'
-                releaseType = isGit ? 'alpha' : isBeta ? 'beta' : 'release'
-                mcversions.each { addGameVersion(it) }
+                releaseType = publishType
+                nmod.mcversions.each { addGameVersion(it) }
                 mainArtifact(jar)
             }
+            if (dryRun) {
+                curseGradleOptions.debug = true
+            }
         }
-        tasks['curseforge'].group = 'publishing'
+        tasks.named('curseforge').get().group = 'publishing'
     }
 
     if (nmod.modrinthID && project.hasProperty('modrinthToken')) {
         modrinth {
-            projectId = nmod.modrinthID
-            token = project.modrinthToken
-            changelog = lastChangelog
-            uploadFile = jar
-            versionType = isGit ? 'alpha' : isBeta ? 'beta' : 'release'
-            gameVersions = mcversions
+            projectId.set(nmod.modrinthID)
+            token.set(project.modrinthToken as String)
+            changelog.set(changelogText)
+            uploadFile.set(jar)
+            versionType.set(publishType)
+            gameVersions.set(nmod.mcversions)
+            if (dryRun) {
+                debugMode.set(true)
+            }
         }
     }
 
@@ -538,7 +427,7 @@ def configure = {
                             connection = developerConnection = "scm:git:https://github.com/necauqua/${nmod.githubRepo}"
                         }
                         if (project.hasProperty('githubToken')) {
-                            def get = { url ->
+                            def get = { String url ->
                                 def conn = new URL(url).openConnection()
                                 conn.setRequestProperty('Authorization', "token ${project.githubToken}")
                                 return new JsonSlurper().parse(conn.getInputStream())
@@ -561,6 +450,11 @@ def configure = {
             }
         }
         repositories {
+            if (dryRun) {
+                // we don't verify the maven.pass (github token would've already failed)
+                // but eh I didn't find a way for a proper dry-run of maven-publish
+                return
+            }
             if (project.hasProperty('githubToken') && nmod.githubRepo) {
                 maven {
                     credentials {
