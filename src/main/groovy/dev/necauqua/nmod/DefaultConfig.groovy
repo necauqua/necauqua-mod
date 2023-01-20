@@ -85,7 +85,8 @@ static Closure configure = hint {
         testOutputDir = compileTestJava.destinationDirectory.getAsFile().get()
     }
 
-    def api = sourceSets.named('api').getOrNull()
+    //noinspection ConfigurationAvoidance - sourceSets.named fails if object was never defined
+    def api = sourceSets.findByName('api')
 
     if (api) {
         sourceSets.main {
