@@ -323,26 +323,28 @@ static Closure configure = hint {
     def isBeta = project.version.contains('-beta') || project.version.contains('-rc')
     def publishType = isGit ? 'alpha' : isBeta ? 'beta' : 'release'
 
-    def changelogText
+    def changelogText = 'No changelog'
     try {
         changelogText = file('last-changelog.md').text
     } catch (FileNotFoundException ignored) {
-        // omegalul
-        // this is obviously for rare cases when I'm publishing from my machine
-        // and don't have the last-changelog.md in place, as it happens within CI
-        def common = [
-                "docker", "run", "--rm",
-                "--workdir", "/workdir",
-                "-v", "${project.rootDir}:/workdir",
-                "-v", "/tmp:/tmp",
-                "ghcr.io/necauqua/changelogs:v1"]
-        (common + ["extract", "/tmp/changelog.json", ""])
-                .execute()
-                .waitFor()
-        (common + ["render", "/tmp/changelog.json", "", "", "", "/tmp/last-changelog.md", "true", ""])
-                .execute()
-                .waitFor()
-        changelogText = file('/tmp/last-changelog.md').text
+        if (System.getenv("CI") == null) {
+            // omegalul
+            // this is obviously for rare cases when I'm publishing from my machine
+            // and don't have the last-changelog.md in place, as it happens within CI
+            def common = [
+                    "docker", "run", "--rm",
+                    "--workdir", "/workdir",
+                    "-v", "${project.rootDir}:/workdir",
+                    "-v", "/tmp:/tmp",
+                    "ghcr.io/necauqua/changelogs:v1"]
+            (common + ["extract", "/tmp/changelog.json", ""])
+                    .execute()
+                    .waitFor()
+            (common + ["render", "/tmp/changelog.json", "", "", "", "/tmp/last-changelog.md", "true", ""])
+                    .execute()
+                    .waitFor()
+            changelogText = file('/tmp/last-changelog.md').text
+        }
     }
 
     if (nmod.curseID && project.hasProperty('curseApiKey')) {
