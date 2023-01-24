@@ -67,9 +67,9 @@ static def before = hint {
 @Field
 static Closure configure = hint {
 
-    def gitDescribe = git(['describe', '--first-parent'])
+    def gitDescribe = git(['describe', '--always', '--first-parent'])
     if (gitDescribe.isEmpty()) {
-        // new repo with no HEAD? no git at all? etc
+        // new repo with no commits? no git at all? etc
         throw new IllegalStateException('git describe failed')
     }
     version = gitDescribe.first().replaceFirst(~/^v/, '')
