@@ -70,9 +70,10 @@ static Closure configure = hint {
     def gitDescribe = git(['describe', '--always', '--first-parent'])
     if (gitDescribe.isEmpty()) {
         // new repo with no commits? no git at all? etc
-        throw new IllegalStateException('git describe failed')
+        version = 'unversioned'
+    } else {
+        version = gitDescribe.first().replaceFirst(~/^v/, '')
     }
-    version = gitDescribe.first().replaceFirst(~/^v/, '')
 
     group = 'dev.necauqua.mods'
 
@@ -376,6 +377,14 @@ static Closure configure = hint {
             if (dryRun) {
                 debugMode.set(true)
             }
+        }
+    }
+
+    // fixup the warning:
+    // Task ':publish..' uses this output of task ':signJar' without declaring an explicit or implicit dependency.
+    afterEvaluate {
+        tasks.named('generateMetadataFileForMavenPublication') {
+            dependsOn 'signJar'
         }
     }
 
