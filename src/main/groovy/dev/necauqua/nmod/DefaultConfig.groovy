@@ -318,7 +318,7 @@ static Closure configure = hint {
         outputFile = jar.archiveFile
     }
 
-    def dryRun = System.getenv('DRY_RUN') == "true"
+    def dryRun = System.getenv('DRY_RUN') != null
 
     def isGit = git(['describe', '--first-parent', '--exact-match']).isEmpty()
     def isBeta = project.version.contains('-beta') || project.version.contains('-rc')
@@ -328,10 +328,10 @@ static Closure configure = hint {
     try {
         changelogText = file('last-changelog.md').text
     } catch (FileNotFoundException ignored) {
-        if (System.getenv("CI") == null) {
-            // omegalul
-            // this is obviously for rare cases when I'm publishing from my machine
-            // and don't have the last-changelog.md in place, as it happens within CI
+        // omegalul
+        // this is obviously for rare cases when I'm publishing from my machine
+        // and don't have the last-changelog.md in place, as it happens within CI
+        if (System.getenv('LOCAL_PUBLISH') != null) {
             def common = [
                     "docker", "run", "--rm",
                     "--workdir", "/workdir",
