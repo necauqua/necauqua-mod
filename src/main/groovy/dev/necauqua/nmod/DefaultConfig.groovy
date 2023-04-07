@@ -341,7 +341,7 @@ static Closure configure = hint {
             (common + ["extract", "/tmp/changelog.json", ""])
                     .execute()
                     .waitFor()
-            (common + ["render", "/tmp/changelog.json", "", "", "", "/tmp/last-changelog.md", "true", ""])
+            (common + ["render", "/tmp/changelog.json", "", "", "", "", "/tmp/last-changelog.md", "true", ""])
                     .execute()
                     .waitFor()
             changelogText = file('/tmp/last-changelog.md').text
