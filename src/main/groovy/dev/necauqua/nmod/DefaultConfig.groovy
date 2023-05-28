@@ -20,6 +20,9 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.plugins.ide.idea.model.IdeaModel
 import org.spongepowered.asm.gradle.plugins.MixinExtension
 
+import java.util.stream.Collectors
+import java.util.stream.Stream
+
 static List<String> git(List<String> args) {
     def res = ['git', *args].execute().text.split('\n').toList()
     return res != [''] ? res : []
@@ -87,16 +90,45 @@ static Closure configure = hint {
     }
 
     //noinspection ConfigurationAvoidance - sourceSets.named fails if object was never defined
-    def api = sourceSets.findByName('api')
+    def apiSet = sourceSets.findByName('api')
 
-    if (api) {
+    if (apiSet) {
         sourceSets.main {
-            compileClasspath += api.output
-            runtimeClasspath += api.output
+            compileClasspath += apiSet.output
+            runtimeClasspath += apiSet.output
         }
+
         configurations {
+            // this is needed so you can depend on api of a subproject
+            // from another subproject in the same multiproject
+            // (like cm2 -> mira):
+            api
+
             apiCompile.extendsFrom(compile)
             apiImplementation.extendsFrom(implementation)
+        }
+
+        tasks.register('javadocs', Javadoc) {
+            classpath = sourceSets.main.compileClasspath
+            source = apiSet.java
+            options.addStringOption('Xdoclint:none', '-quiet')
+        }
+
+        tasks.register('javadocJar', Jar) {
+            dependsOn tasks.javadocs
+            archiveClassifier.set('javadoc')
+            from javadoc.destinationDir
+        }
+
+        tasks.register('apiJar', Jar) {
+            archiveClassifier.set('api')
+            from apiSet.output
+        }
+
+        artifacts {
+            archives javadocJar
+            archives apiJar
+            api apiJar
         }
     }
 
@@ -117,9 +149,17 @@ static Closure configure = hint {
             accessTransformer = at
         }
 
+        // fixup for FG not doing this correctly for multiprojects
+        def ideaModuleName = Stream.iterate(project, { it != null }, { it.parent })
+            .map { it.name.replace(' ', '_') }
+            .collect(Collectors.toList())
+            .reverse()
+            .join('.') + '.main'
+
         runs {
             client {
                 workingDirectory file('build/run')
+                ideaModule ideaModuleName
                 args '--username', 'necauqua'
                 args '--uuid', 'f98e9365-2c52-48c5-8647-6662f70b7e3d'
                 property 'forge.logging.console.level', 'debug'
@@ -135,13 +175,14 @@ static Closure configure = hint {
 
                 mods.create(project.name) {
                     source sourceSets.main
-                    if (api) {
-                        source api
+                    if (apiSet) {
+                        source apiSet
                     }
                 }
             }
             server {
                 workingDirectory file('build/server')
+                ideaModule ideaModuleName
                 property 'forge.logging.console.level', 'debug'
 
                 if (nmod.mixin) {
@@ -153,8 +194,8 @@ static Closure configure = hint {
 
                 mods.create(project.name) {
                     source sourceSets.main
-                    if (api) {
-                        source api
+                    if (apiSet) {
+                        source apiSet
                     }
                 }
             }
@@ -226,8 +267,8 @@ static Closure configure = hint {
     compileJava.dependsOn += processSources
 
     processResources {
-        if (api) {
-            from(api.resources.srcDirs)
+        if (apiSet) {
+            from(apiSet.resources.srcDirs)
         }
         rename '(accesstransformer\\.cfg|mods\\.toml|coremods\\.json)', 'META-INF/$1'
     }
@@ -241,8 +282,8 @@ static Closure configure = hint {
         finalizedBy 'reobfJar'
         finalizedBy 'signJar'
 
-        if (api) {
-            from api.output.classesDirs
+        if (apiSet) {
+            from apiSet.output.classesDirs
         }
         from 'LICENSE'
 
@@ -271,36 +312,12 @@ static Closure configure = hint {
     tasks.register('sourcesJar', Jar) {
         archiveClassifier.set('src')
         from sourceSets.main.allJava
-        if (api) {
-            from api.allJava
+        if (apiSet) {
+            from apiSet.allJava
         }
     }
 
     artifacts.archives sourcesJar
-
-    if (api) {
-        tasks.register('javadocs', Javadoc) {
-            classpath = sourceSets.main.compileClasspath
-            source = api.java
-            options.addStringOption('Xdoclint:none', '-quiet')
-        }
-
-        tasks.register('javadocJar', Jar) {
-            dependsOn tasks.javadocs
-            archiveClassifier.set('javadoc')
-            from javadoc.destinationDir
-        }
-
-        tasks.register('apiJar', Jar) {
-            archiveClassifier.set('api')
-            from api.output
-        }
-
-        artifacts {
-            archives javadocJar
-            archives apiJar
-        }
-    }
 
     tasks.register('signJar', SignJar) {
         dependsOn tasks.reobfJar
@@ -318,7 +335,7 @@ static Closure configure = hint {
         outputFile = jar.archiveFile
     }
 
-    def dryRun = System.getenv('DRY_RUN') != null
+    def dryRun = System.getenv('DRY_RUN') == "true"
 
     def isGit = git(['describe', '--first-parent', '--exact-match']).isEmpty()
     def isBeta = project.version.contains('-beta') || project.version.contains('-rc')
@@ -405,7 +422,7 @@ static Closure configure = hint {
 
                 artifact sourcesJar
 
-                if (api) {
+                if (apiSet) {
                     artifact apiJar
                     artifact javadocJar
                 }
